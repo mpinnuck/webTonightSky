@@ -7,7 +7,11 @@ import re
 from astropy.coordinates import EarthLocation, AltAz, SkyCoord
 from astropy.time import Time
 import astropy.units as u
-from timezonefinder import TimezoneFinder
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("TonightSky")
 
 app = Flask(__name__)
 CORS(app)
@@ -31,6 +35,22 @@ table_headers = {
     "Catalog": "Catalog"
 }
 
+@app.route('/api/calculate_lst', methods=['POST'])
+def calculate_lst():
+    try:
+        data = request.json
+        longitude = float(data['longitude'])
+        local_time_str = f"{data['date']} {data['local_time']}"
+        timezone = pytz.timezone(data['timezone'])
+        local_time = timezone.localize(datetime.strptime(local_time_str, "%Y-%m-%d %H:%M"))
+        utc_time = local_time.astimezone(pytz.utc)
+        lst_hours = Time(utc_time).sidereal_time('mean', longitude * u.deg).hour
+        return jsonify({"LST": f"{int(lst_hours):02}:{int((lst_hours*60)%60):02}:{int((lst_hours*3600)%60):02}"})
+    except Exception as e:
+        logger.error(f"Error calculating LST: {e}")
+        return jsonify({"error": "Failed to calculate Local Sidereal Time"}), 500
+
+# Helper functions
 def calculate_transit_and_alt_az(ra_deg, dec_deg, latitude, longitude, local_time):
     astropy_time = Time(local_time.astimezone(pytz.utc))
     location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg, height=0 * u.m)
@@ -114,65 +134,85 @@ def evaluate_conditions(row, conditions):
 
 @app.route('/api/list_objects', methods=['POST'])
 def list_objects():
-    data = request.json
-    latitude = float(data['latitude'])
-    longitude = float(data['longitude'])
-    local_time_str = f"{data['date']} {data['local_time']}"
-    timezone = pytz.timezone(data['timezone'])
-    local_time = timezone.localize(datetime.strptime(local_time_str, "%Y-%m-%d %H:%M"))
-    filter_expression = data.get("filter_expression", "")
-    catalog_filters = data.get("catalogs", {})
+    try:
+        data = request.json
+        latitude = float(data['latitude'])
+        longitude = float(data['longitude'])
+        local_time_str = f"{data['date']} {data['local_time']}"
+        timezone = pytz.timezone(data['timezone'])
+        local_time = timezone.localize(datetime.strptime(local_time_str, "%Y-%m-%d %H:%M"))
+        filter_expression = data.get("filter_expression", "")
+        catalog_filters = data.get("catalogs", {})
 
-    objects = []
-    with open(csv_filename, mode='r', encoding='ISO-8859-1') as file:
-        reader = csv.DictReader(file)
+        objects = []
+        with open(csv_filename, mode='r', encoding='ISO-8859-1') as file:
+            reader = csv.DictReader(file)
 
-        # Use table headers as valid columns for the query parser
-        valid_columns = {header.lower(): header for header in table_headers.keys()}
+            # Use table headers as valid columns for the query parser
+            valid_columns = {header.lower(): header for header in table_headers.keys()}
 
-        # Parse the filter expression into conditions
-        try:
-            conditions = parse_query_conditions(filter_expression, valid_columns) if filter_expression else []
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
+            # Parse the filter expression into conditions
+            try:
+                conditions = parse_query_conditions(filter_expression, valid_columns) if filter_expression else []
+            except ValueError as e:
+                logger.error(f"Query parsing error: {e}")
+                return jsonify({"error": f"Query parsing error: {e}"}), 400
 
-        for row in reader:
-            # Apply catalog filter (check if the object's catalog is enabled)
-            catalog = row['Catalog'].strip()
-            if catalog_filters and not catalog_filters.get(catalog, False):
-                continue
+            count = 0  # Initialize a counter for tracking progress
 
-            # Calculate transit time and AltAz for each object
-            ra = float(row['RA'])
-            dec = float(row['Dec'])
-            transit_time_minutes, local_transit_time, before_after, altitude, azimuth = calculate_transit_and_alt_az(
-                ra, dec, latitude, longitude, local_time)
+            for row in reader:
+                count += 1
+                if count % 500 == 0:
+                    logger.debug(f"Processed {count} rows")
 
-            if altitude < 0:
-                continue
+                # Apply catalog filter (check if the object's catalog is enabled)
+                catalog = row['Catalog'].strip()
+                if catalog_filters and not catalog_filters.get(catalog, False):
+                    continue
 
-            # Build the full row object for condition evaluation
-            current_row = {
-                'Name': row['Name'],
-                'RA': degrees_to_ra(ra),
-                'Dec': format_dec(dec),
-                'Transit Time': local_transit_time,
-                'Relative TT': format_transit_time(transit_time_minutes),
-                'Before/After': before_after,
-                'Altitude': f"{altitude:.2f}°",  # Calculated Altitude in degrees
-                'Azimuth': f"{azimuth:.2f}°",
-                'Alt Name': row.get('Alt Name', ''),
-                'Type': row['Type'],
-                'Magnitude': row['Magnitude'],
-                'Info': row['Info'],
-                'Catalog': row['Catalog']
-            }
+                # Calculate transit time and AltAz for each object
+                ra = float(row['RA'])
+                dec = float(row['Dec'])
+                transit_time_minutes, local_transit_time, before_after, altitude, azimuth = calculate_transit_and_alt_az(
+                    ra, dec, latitude, longitude, local_time)
 
-            # Evaluate the row against the conditions
-            if evaluate_conditions(current_row, conditions):
-                objects.append(current_row)
+                if altitude < 0:
+                    continue
 
-    return jsonify(objects)
+                # Build the full row object for condition evaluation
+                current_row = {
+                    'Name': row['Name'],
+                    'RA': degrees_to_ra(ra),
+                    'Dec': format_dec(dec),
+                    'Transit Time': local_transit_time,
+                    'Relative TT': format_transit_time(transit_time_minutes),
+                    'Before/After': before_after,
+                    'Altitude': f"{altitude:.2f}°",  # Calculated Altitude in degrees
+                    'Azimuth': f"{azimuth:.2f}°",
+                    'Alt Name': row.get('Alt Name', ''),
+                    'Type': row['Type'],
+                    'Magnitude': row['Magnitude'],
+                    'Info': row['Info'],
+                    'Catalog': row['Catalog']
+                }
+
+                # Evaluate the row against the conditions
+                if evaluate_conditions(current_row, conditions):
+                    objects.append(current_row)
+
+        logger.debug(f"Total rows processed: {count}")
+        logger.debug(f"Number of objects returned: {len(objects)}")
+        return jsonify(objects)
+
+    except KeyError as e:
+        logger.error(f"Missing data field: {e}")
+        return jsonify({"error": f"Missing data field: {e}"}), 400
+    except ValueError as e:
+        logger.error(f"Value error: {e}")
+        return jsonify({"error": f"Value error: {e}"}), 400
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
