@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TonightSky v1.0</title>
+    <link rel="stylesheet" href="./css/styles.css">
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dateField = document.getElementById('date');
+            if (!dateField.value) {
+                const today = new Date().toISOString().split('T')[0];
+                dateField.value = today;
+            }
+            addResizers();
+        });
+
+        async function listObjects() {
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            const date = document.getElementById('date').value;
+            const local_time = document.getElementById('local_time').value;
+            const timezone = document.getElementById('timezone').value;
+            const filter_expression = document.getElementById('filter_expression').value;
+            const catalogs = {};
+            document.querySelectorAll('input[name="catalogs"]').forEach(cb => {
+                catalogs[cb.value] = cb.checked;
+            });
+
+            const tableBody = document.getElementById('resultsTableBody');
+            tableBody.innerHTML = "";
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/list_objects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ latitude, longitude, date, local_time, timezone, filter_expression, catalogs })
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch data');
+                
+                const data = await response.json();
+                populateTable(data);
+
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                alert("Failed to load objects. Please try again.");
+            }
+        }
+
+        function populateTable(data) {
+            const tableBody = document.getElementById('resultsTableBody');
+            data.forEach(obj => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td>
+                    <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td>${obj.Altitude}</td>
+                    <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
+                    <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        let sortDirection = 1;
+        function sortTableByColumn(columnIndex) {
+            const tableBody = document.getElementById('resultsTableBody');
+            const rows = Array.from(tableBody.querySelectorAll('tr'));
+
+            rows.sort((a, b) => {
+                const cellA = a.cells[columnIndex].innerText;
+                const cellB = b.cells[columnIndex].innerText;
+
+                if (!isNaN(cellA) && !isNaN(cellB)) {
+                    return (cellA - cellB) * sortDirection;
+                } else {
+                    return cellA.localeCompare(cellB) * sortDirection;
+                }
+            });
+
+            sortDirection = -sortDirection;
+            rows.forEach(row => tableBody.appendChild(row));
+        }
+
+        function addResizers() {
+            document.querySelectorAll('#resultsTable th').forEach((th, index) => {
+                const resizer = document.createElement('div');
+                resizer.classList.add('resizer');
+                th.appendChild(resizer);
+                resizer.addEventListener('mousedown', e => initResize(e, index));
+            });
+        }
+
+        function initResize(e, index) {
+            const startX = e.pageX;
+            const startWidth = e.target.parentElement.offsetWidth;
+
+            function resizeColumn(e) {
+                const newWidth = Math.max(startWidth + (e.pageX - startX), 50);
+                document.querySelectorAll(`#resultsTable th:nth-child(${index + 1}), #resultsTable td:nth-child(${index + 1})`)
+                    .forEach(cell => {
+                        cell.style.width = `${newWidth}px`;
+                    });
+            }
+
+            function stopResize() {
+                document.removeEventListener('mousemove', resizeColumn);
+                document.removeEventListener('mouseup', stopResize);
+            }
+
+            document.addEventListener('mousemove', resizeColumn);
+            document.addEventListener('mouseup', stopResize);
+        }
+    </script>
+</head>
+<body>
+    <div id="resultsContainer">
+        <h1>TonightSky v1.0</h1>
+        <form onsubmit="event.preventDefault(); listObjects();" id="topForm">
+            <div class="row">
+                <label>Latitude: <input type="text" id="latitude" value="-33.713611"></label>
+                <label>Longitude: <input type="text" id="longitude" value="151.090278"></label>
+            </div>
+            <div class="row">
+                <label>Date: <input type="date" id="date"></label>
+                <label>Local Time: <input type="time" id="local_time" value="22:00"></label>
+                <label>LST: <span id="lst_display">00:00:00</span></label>
+            </div>
+            <div class="row">
+                <label>Timezone: <input type="text" id="timezone" value="Australia/Sydney"></label>
+            </div>
+            <fieldset>
+                <legend>Catalog Filters:</legend>
+                <label><input type="checkbox" name="catalogs" value="Messier" checked> Messier</label>
+                <label><input type="checkbox" name="catalogs" value="NGC"> NGC</label>
+                <label><input type="checkbox" name="catalogs" value="IC"> IC</label>
+                <label><input type="checkbox" name="catalogs" value="Caldwell"> Caldwell</label>
+                <label><input type="checkbox" name="catalogs" value="Abell"> Abell</label>
+                <label><input type="checkbox" name="catalogs" value="Sharpless"> Sharpless</label>
+            </fieldset>
+            <label>Filter Query: <input type="text" id="filter_expression" class="wide-input" placeholder="e.g., altitude > 30 and magnitude < 6"></label>
+            <button type="submit">List Objects</button>
+        </form>
+
+        <table id="resultsTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTableByColumn(0)">Name</th>
+                    <th onclick="sortTableByColumn(1)">RA</th>
+                    <th onclick="sortTableByColumn(2)">Dec</th>
+                    <th onclick="sortTableByColumn(3)">Transit Time</th>
+                    <th onclick="sortTableByColumn(4)">Relative TT</th>
+                    <th onclick="sortTableByColumn(5)">Before/After</th>
+                    <th onclick="sortTableByColumn(6)">Altitude</th>
+                    <th onclick="sortTableByColumn(7)">Azimuth</th>
+                    <th onclick="sortTableByColumn(8)">Alt Name</th>
+                    <th onclick="sortTableByColumn(9)">Type</th>
+                    <th onclick="sortTableByColumn(10)">Magnitude</th>
+                    <th onclick="sortTableByColumn(11)">Info</th>
+                    <th onclick="sortTableByColumn(12)">Catalog</th>
+                </tr>
+            </thead>
+            <tbody id="resultsTableBody">
+                <!-- Table rows will be appended here by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
