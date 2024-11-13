@@ -7,12 +7,42 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const dateField = document.getElementById('date');
+            const timeField = document.getElementById('local_time');
+            
             if (!dateField.value) {
                 const today = new Date().toISOString().split('T')[0];
                 dateField.value = today;
             }
+            
             addResizers();
+            updateLST();  // Initial LST calculation
+            dateField.addEventListener('input', updateLST);
+            timeField.addEventListener('input', updateLST);
         });
+
+        async function updateLST() {
+            const longitude = document.getElementById('longitude').value;
+            const date = document.getElementById('date').value;
+            const local_time = document.getElementById('local_time').value;
+            const timezone = document.getElementById('timezone').value;
+
+            if (!longitude || !date || !local_time || !timezone) return;  // Ensure all inputs are filled
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/calculate_lst', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ longitude, date, local_time, timezone })
+                });
+
+                if (!response.ok) throw new Error('Failed to calculate LST');
+                
+                const data = await response.json();
+                document.getElementById('lst_display').textContent = data.LST;
+            } catch (error) {
+                console.error("Error fetching LST:", error);
+            }
+        }
 
         async function listObjects() {
             const latitude = document.getElementById('latitude').value;
@@ -49,14 +79,26 @@
 
         function populateTable(data) {
             const tableBody = document.getElementById('resultsTableBody');
+            tableBody.innerHTML = "";  // Clear existing rows
+
             data.forEach(obj => {
                 const row = document.createElement('tr');
+                
+                // Fill row with object data
                 row.innerHTML = `
                     <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td>
                     <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td>${obj.Altitude}</td>
                     <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
                     <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
                 `;
+
+                // Add double-click event listener to open AstroBin page
+                row.addEventListener('dblclick', () => {
+                    const objectName = obj.Name.replace(/\s+/g, '');  // Replace spaces with '+'
+                    const astrobinUrl = `https://www.astrobin.com/search/?q=${encodeURIComponent(objectName)}`;
+                    window.open(astrobinUrl, '_blank');
+                });
+
                 tableBody.appendChild(row);
             });
         }
@@ -116,31 +158,44 @@
     <div id="resultsContainer">
         <h1>TonightSky v1.0</h1>
         <form onsubmit="event.preventDefault(); listObjects();" id="topForm">
-            <div class="row">
-                <label>Latitude: <input type="text" id="latitude" value="-33.713611"></label>
-                <label>Longitude: <input type="text" id="longitude" value="151.090278"></label>
+            <!-- First Row: Latitude, Longitude, Timezone -->
+            <div class="form-row">
+                <label class="label-input">Latitude: <input type="text" id="latitude" value="-33.713611"></label>
+                <label class="label-input">Longitude: <input type="text" id="longitude" value="151.090278"></label>
+                <label class="label-input">Timezone: <input type="text" id="timezone" value="Australia/Sydney"></label>
             </div>
-            <div class="row">
-                <label>Date: <input type="date" id="date"></label>
-                <label>Local Time: <input type="time" id="local_time" value="22:00"></label>
-                <label>LST: <span id="lst_display">00:00:00</span></label>
+            
+            <!-- Second Row: Date, Local Time, LST -->
+            <div class="form-row">
+                <label class="label-input">Date: <input type="date" id="date"></label>
+                <label class="label-input">Local Time: <input type="time" id="local_time" value="22:00"></label>
+                <label class="label-input">LST: <span id="lst_display">00:00:00</span></label>
             </div>
-            <div class="row">
-                <label>Timezone: <input type="text" id="timezone" value="Australia/Sydney"></label>
-            </div>
-            <fieldset>
-                <legend>Catalog Filters:</legend>
+            
+            <!-- Third Row: Catalog Filters -->
+            <div class="form-row">
+                <span class="label">Catalog:</span>
                 <label><input type="checkbox" name="catalogs" value="Messier" checked> Messier</label>
                 <label><input type="checkbox" name="catalogs" value="NGC"> NGC</label>
                 <label><input type="checkbox" name="catalogs" value="IC"> IC</label>
                 <label><input type="checkbox" name="catalogs" value="Caldwell"> Caldwell</label>
                 <label><input type="checkbox" name="catalogs" value="Abell"> Abell</label>
                 <label><input type="checkbox" name="catalogs" value="Sharpless"> Sharpless</label>
-            </fieldset>
-            <label>Filter Query: <input type="text" id="filter_expression" class="wide-input" placeholder="e.g., altitude > 30 and magnitude < 6"></label>
-            <button type="submit">List Objects</button>
+            </div>
+            
+            <!-- Fourth Row: Filter Query -->
+            <div class="form-row full-width">
+                <label>Filter Query:</label>
+                <input type="text" id="filter_expression" class="wide-input" placeholder="e.g., altitude > 30 and magnitude < 6">
+            </div>
+                
+            <!-- Button Row -->
+            <div class="button-row">
+                <button type="submit">List Objects</button>
+            </div>
         </form>
 
+        <!-- Results Table -->
         <table id="resultsTable">
             <thead>
                 <tr>

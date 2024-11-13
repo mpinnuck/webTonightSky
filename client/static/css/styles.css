@@ -8,19 +8,20 @@ body {
 
 /* App Header */
 h1 {
-    font-size: 20px; /* Smaller header font size */
+    font-size: 18px;
     font-weight: normal;
     text-align: center;
     color: #333;
-    margin: 10px 0; /* Reduced margin for less wasted space */
-    padding: 0;
+    margin: 10px 0;
 }
 
 /* Container for the Entire App */
 #resultsContainer { 
-    max-width: 1200px; 
-    margin: 10px auto; /* Reduced margin */
-    padding: 10px;
+    width: 100%; /* Full width */
+    max-width: none; /* Remove max width */
+    margin-left: 0; /* Align container to the left */
+    padding-left: 5px; /* Add 5px padding on the left */
+    padding-right: 5px; /* Add 5px padding on the right */
 }
 
 /* Form Styling */
@@ -28,51 +29,60 @@ form {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 15px;
-    background-color: #ffffff;
-    border: 1px solid #ccc;
+    padding: 15px 15px 15px 5px; /* Remove padding on the left */
+    background-color: #e6f9e6; /* Light blue background */
+    border: 1px solid #b3d1ff;
     border-radius: 8px;
     box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* Row Layout for Form Controls */
-.row {
+.form-row {
     display: flex;
-    gap: 15px;
+    gap: 20px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
-/* Label Styling */
-label {
+/* Label-Input Pair Styling */
+.label-input {
     display: flex;
     flex-direction: column;
     font-size: 14px;
-    font-weight: 500;
     color: #333;
-    flex: 1; /* Allows for even spacing across form */
 }
 
-/* Input and Textbox Styling with 3D effect */
+/* Input and Textbox Styling with 3D inset (recessed) effect */
 input[type="text"], input[type="date"], input[type="time"], .wide-input {
     padding: 6px;
     font-size: 14px;
-    border: 1px solid #ccc;
+    border: 1px solid #b3d1ff;
     border-radius: 4px;
-    box-shadow: inset 0px 1px 3px rgba(0, 0, 0, 0.15); /* 3D inset shadow */
+    background-color: #f9f9f9;
+    box-shadow: inset 0px 2px 5px rgba(0, 0, 0, 0.1); /* Recessed inset shadow */
+    min-width: 180px;
+}
+
+/* Wide Input for Filter Query */
+.wide-input {
     width: 100%;
 }
 
 /* Button Styling */
+.button-row {
+    display: flex;
+    justify-content: flex-start;
+}
+
 button {
     background-color: #4CAF50;
     color: white;
-    padding: 8px 16px; /* Slightly smaller button */
+    padding: 8px 16px;
     font-size: 14px;
     font-weight: bold;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    align-self: flex-start; /* Align button to the start of the form */
 }
 
 button:hover {
@@ -84,29 +94,26 @@ button:hover {
     margin-top: 10px;
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed; /* Keeps columns uniform */
+    table-layout: auto;
 }
 
-/* Table Headers and Cells */
 th, td {
-    border: 1px solid #ddd;
-    padding: 6px;
+    border: 1px solid #cccccc; /* Light gray border color */
+    padding: 4px 8px; /* Reduced padding for a more compact look */
     text-align: left;
-    font-size: 13px; /* Slightly smaller font for table */
-    line-height: 1.4;
+    font-size: 0.9em;
+    line-height: 1.2; /* Tighter line height */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 th {
     background-color: #f2f2f2;
+    color: #333;
     cursor: pointer;
     user-select: none;
-    position: relative;
-}
-
-td {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    border: 1px solid #cccccc; /* Match header border color to cell border */
 }
 
 /* Alternate Row Colors */
@@ -152,7 +159,7 @@ fieldset label {
         padding: 10px;
     }
 
-    form, .row {
+    form, .form-row {
         flex-direction: column;
     }
 
