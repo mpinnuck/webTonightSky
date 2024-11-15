@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <title>TonightSky v1.0</title>
     <link rel="stylesheet" href="./css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.2.1"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const dateField = document.getElementById('date');
@@ -15,7 +17,8 @@
             }
             
             addResizers();
-            updateLST();  // Initial LST calculation
+            updateLST();
+            
             dateField.addEventListener('input', updateLST);
             timeField.addEventListener('input', updateLST);
         });
@@ -26,7 +29,7 @@
             const local_time = document.getElementById('local_time').value;
             const timezone = document.getElementById('timezone').value;
 
-            if (!longitude || !date || !local_time || !timezone) return;  // Ensure all inputs are filled
+            if (!longitude || !date || !local_time || !timezone) return;
 
             try {
                 const response = await fetch('http://127.0.0.1:5000/api/calculate_lst', {
@@ -79,26 +82,25 @@
 
         function populateTable(data) {
             const tableBody = document.getElementById('resultsTableBody');
-            tableBody.innerHTML = "";  // Clear existing rows
+            tableBody.innerHTML = "";
 
             data.forEach(obj => {
                 const row = document.createElement('tr');
-                
-                // Fill row with object data
                 row.innerHTML = `
                     <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td>
                     <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td>${obj.Altitude}</td>
                     <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
                     <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
                 `;
-
-                // Add double-click event listener to open AstroBin page
                 row.addEventListener('dblclick', () => {
-                    const objectName = obj.Name.replace(/\s+/g, '');  // Replace spaces with '+'
+                    const objectName = obj.Name.replace(/\s+/g, '');
                     const astrobinUrl = `https://www.astrobin.com/search/?q=${encodeURIComponent(objectName)}`;
                     window.open(astrobinUrl, '_blank');
                 });
-
+                row.addEventListener('contextmenu', (event) => {
+                    event.preventDefault();
+                    showContextMenu(event.pageX, event.pageY, obj);
+                });
                 tableBody.appendChild(row);
             });
         }
@@ -152,13 +154,229 @@
             document.addEventListener('mousemove', resizeColumn);
             document.addEventListener('mouseup', stopResize);
         }
+
+        async function fetchAltitudeData(object) {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/altitude_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        latitude: document.getElementById('latitude').value,
+                        longitude: document.getElementById('longitude').value,
+                        ra: object.RA,
+                        dec: object.Dec,
+                        date: document.getElementById('date').value,
+                        timezone: document.getElementById('timezone').value
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch altitude data');
+
+                const data = await response.json();
+                showAltitudeGraph(data);
+            } catch (error) {
+                console.error("Error fetching altitude data:", error);
+            }
+        }
+
+        function parseTimeToMinutes(timeStr, referenceSunsetTime) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            let totalMinutes = hours * 60 + minutes;
+
+            // If the time is after midnight but before sunrise (e.g., 00:30), treat it as the next day.
+            if (totalMinutes < referenceSunsetTime) {
+                totalMinutes += 1440;  // Add 24 hours in minutes to shift to the next day
+            }
+
+            return totalMinutes;
+        }
+
+        function showAltitudeGraph(data) {
+            // Display the graph modal
+            document.getElementById('graphModal').style.display = 'block';
+
+            // Get the canvas context
+            const ctx = document.getElementById('altitudeChart').getContext('2d');
+
+            // Clear any existing chart on the canvas
+            if (window.altitudeChartInstance) {
+                window.altitudeChartInstance.destroy();
+            }
+
+            // Calculate the minutes from the first time in the data for x-values
+            const firstTime = data.times[0];
+            const [firstHour, firstMinute] = firstTime.split(':').map(Number);
+            const firstTimeInMinutes = firstHour * 60 + firstMinute;
+
+            const timeInMinutes = data.times.map(time => {
+                const [hour, minute] = time.split(':').map(Number);
+                let totalMinutes = hour * 60 + minute;
+
+                // Adjust times past midnight to ensure continuity
+                if (totalMinutes < firstTimeInMinutes) {
+                    totalMinutes += 1440;  // Add 24 hours in minutes for times after midnight
+                }
+
+                return totalMinutes - firstTimeInMinutes;
+            });
+
+            // Map event times (sunset, sunrise, etc.) to minutes from the first time
+            const sunsetMinutes = parseTimeToMinutes(data.sunset, firstTimeInMinutes) - firstTimeInMinutes;
+            const sunriseMinutes = parseTimeToMinutes(data.sunrise, firstTimeInMinutes) - firstTimeInMinutes;
+            const dawnMinutes = parseTimeToMinutes(data.astronomical_dawn, firstTimeInMinutes) - firstTimeInMinutes;
+            const duskMinutes = parseTimeToMinutes(data.astronomical_dusk, firstTimeInMinutes) - firstTimeInMinutes;
+            const transitMinutes = parseTimeToMinutes(data.transit_time, firstTimeInMinutes) - firstTimeInMinutes;
+            const midnightMinutes = (24 * 60 - firstTimeInMinutes) % 1440;  // Calculate midnight position
+
+            // Create a new Chart.js line chart
+            window.altitudeChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timeInMinutes,
+                    datasets: [{
+                        label: 'Altitude',
+                        data: data.altitudes,
+                        borderColor: 'blue',
+                        borderWidth: 1,       // Thinner line
+                        pointRadius: 0,       // Remove data point circles
+                        fill: false,
+                        tension: 0.4  // Smooth curves
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2,  // Set aspect ratio to 2:1 (width:height)
+                    scales: {
+                        y: {
+                            title: { display: true, text: 'Altitude (°)' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Local Time (HH)' },
+                            ticks: {
+                                callback: function(value, index) {
+                                    // Convert minutes since start time back to local hours
+                                    const hour = Math.floor((timeInMinutes[index] + firstTimeInMinutes) / 60) % 24;
+                                    // Only label the full hours
+                                    return (timeInMinutes[index] % 60 === 0) ? `${hour}` : '';
+                                },
+                                autoSkip: false,
+                                maxRotation: 0,
+                                stepSize: 30 // Ensure grid lines are spaced every 30 minutes
+                            },
+                            grid: {
+                                drawTicks: true,
+                                drawOnChartArea: true,
+                                color: function(context) {
+                                    // Grid lines on the hour and half-hour only
+                                    return (timeInMinutes[context.tick.value] % 30 === 0) ? '#cccccc' : 'transparent';
+
+                                },
+                                borderDash: function(context) {
+                                    return (timeInMinutes[context.tick.value] % 60 === 0) ? [] : [5, 5];
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        annotation: {
+                            annotations: {
+                                sunsetLine: {
+                                    type: 'line',
+                                    scaleID: 'x',
+                                    value: sunsetMinutes,
+                                    borderColor: 'orange',
+                                    borderWidth: 2,
+                                    label: { enabled: true, content: 'Sunset' }
+                                },
+                                sunriseLine: {
+                                    type: 'line',
+                                    scaleID: 'x',
+                                    value: sunriseMinutes,
+                                    borderColor: 'orange',
+                                    borderWidth: 2,
+                                    label: { enabled: true, content: 'Sunrise' }
+                                },
+                                dawnLine: {
+                                    type: 'line',
+                                    scaleID: 'x',
+                                    value: dawnMinutes,
+                                    borderColor: 'purple',
+                                    borderWidth: 2,
+                                    label: { enabled: true, content: 'Astronomical Dawn' }
+                                },
+                                duskLine: {
+                                    type: 'line',
+                                    scaleID: 'x',
+                                    value: duskMinutes,
+                                    borderColor: 'purple',
+                                    borderWidth: 2,
+                                    label: { enabled: true, content: 'Astronomical Dusk' }
+                                },
+                                transitLine: {
+                                    type: 'line',
+                                    scaleID: 'x',
+                                    value: transitMinutes,
+                                    borderColor: 'red',
+                                    borderWidth: 2,
+                                    label: { enabled: true, content: 'Transit' }
+                                },
+                                midnightLine: {
+                                    type: 'line',
+                                    scaleID: 'x',
+                                    value: midnightMinutes,
+                                    borderColor: 'gray',
+                                    borderWidth: 2,
+                                    label: { enabled: true, content: 'Midnight' }
+                                },
+                                maxAltitudeLine: {
+                                    type: 'line',
+                                    scaleID: 'y',
+                                    value: data.max_altitude,
+                                    borderColor: 'green',
+                                    borderWidth: 2,
+                                    label: { enabled: true, content: 'Max Altitude' }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        function showContextMenu(x, y, object) {
+            const contextMenu = document.getElementById('contextMenu');
+            contextMenu.style.display = 'block';
+            contextMenu.style.left = `${x}px`;
+            contextMenu.style.top = `${y}px`;
+
+            document.getElementById('graphOption').onclick = () => {
+                fetchAltitudeData(object);
+                closeContextMenu();
+            };
+        }
+
+        function closeContextMenu() {
+            document.getElementById('contextMenu').style.display = 'none';
+        }
+
+        function closeModal() {
+            document.getElementById('graphModal').style.display = 'none';
+        }
+
+        document.addEventListener('click', (e) => {
+            const contextMenu = document.getElementById('contextMenu');
+            if (contextMenu.style.display === 'block' && !contextMenu.contains(e.target)) {
+                closeContextMenu();
+            }
+        });
     </script>
 </head>
 <body>
     <div id="resultsContainer">
         <h1>TonightSky v1.0</h1>
         <form onsubmit="event.preventDefault(); listObjects();" id="topForm">
-            <!-- First Row: Latitude, Longitude, Timezone -->
             <div class="form-row">
                 <label class="label-input">Latitude: <input type="text" id="latitude" value="-33.713611"></label>
                 <label class="label-input">Longitude: <input type="text" id="longitude" value="151.090278"></label>
@@ -191,7 +409,9 @@
                 
             <!-- Button Row -->
             <div class="button-row">
-                <button type="submit">List Objects</button>
+                <button type="submit">
+                    List Objects
+                </button>
             </div>
         </form>
 
@@ -218,6 +438,19 @@
                 <!-- Table rows will be appended here by JavaScript -->
             </tbody>
         </table>
+    </div>
+
+    <!-- Chart Modal -->
+    <div id="graphModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <canvas id="altitudeChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Context Menu for right-click actions -->
+    <div id="contextMenu" style="display: none; position: absolute; background: #fff; border: 1px solid #ccc; z-index: 1000;">
+        <div id="graphOption" style="padding: 8px; cursor: pointer;">Graph</div>
     </div>
 </body>
 </html>
