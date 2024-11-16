@@ -214,39 +214,96 @@
 
                 // Adjust times past midnight to ensure continuity
                 if (totalMinutes < firstTimeInMinutes) {
-                    totalMinutes += 1440;  // Add 24 hours in minutes for times after midnight
+                    totalMinutes += 1440; // Add 24 hours in minutes for times after midnight
                 }
 
                 return totalMinutes - firstTimeInMinutes;
             });
 
-            // Map event times (sunset, sunrise, etc.) to minutes from the first time
-            const sunsetMinutes = parseTimeToMinutes(data.sunset, firstTimeInMinutes) - firstTimeInMinutes;
-            const sunriseMinutes = parseTimeToMinutes(data.sunrise, firstTimeInMinutes) - firstTimeInMinutes;
-            const dawnMinutes = parseTimeToMinutes(data.astronomical_dawn, firstTimeInMinutes) - firstTimeInMinutes;
-            const duskMinutes = parseTimeToMinutes(data.astronomical_dusk, firstTimeInMinutes) - firstTimeInMinutes;
-            const transitMinutes = parseTimeToMinutes(data.transit_time, firstTimeInMinutes) - firstTimeInMinutes;
-            const midnightMinutes = (24 * 60 - firstTimeInMinutes) % 1440;  // Calculate midnight position
+            // Map event times (sunset, sunrise, etc.) to minutes from the first time, scaled for 10-minute intervals
+            const sunsetMinutes = (parseTimeToMinutes(data.sunset, firstTimeInMinutes) - firstTimeInMinutes) / 10;
+            const sunriseMinutes = (parseTimeToMinutes(data.sunrise, firstTimeInMinutes) - firstTimeInMinutes) / 10;
+            const dawnMinutes = (parseTimeToMinutes(data.astronomical_dawn, firstTimeInMinutes) - firstTimeInMinutes) / 10;
+            const duskMinutes = (parseTimeToMinutes(data.astronomical_dusk, firstTimeInMinutes) - firstTimeInMinutes) / 10;
+            const transitMinutes = (parseTimeToMinutes(data.transit_time, firstTimeInMinutes) - firstTimeInMinutes) / 10;
+            const midnightMinutes = ((24 * 60 - firstTimeInMinutes) % 1440) / 10; // Calculate midnight position
 
-            // Create a new Chart.js line chart
+            const verticalLines = [
+                { position: sunsetMinutes, label: 'Sunset', color: 'orange' },
+                { position: sunriseMinutes, label: 'Sunrise', color: 'orange' },
+                { position: dawnMinutes, label: 'Dawn', color: 'purple' },
+                { position: duskMinutes, label: 'Dusk', color: 'purple' },
+                { position: transitMinutes, label: 'Transit', color: 'red' },
+                { position: midnightMinutes, label: 'Midnight', color: 'gray' },
+            ];
+
+            // Define the annotation plugin configuration
+            const annotations = {};
+            verticalLines.forEach(line => {
+                annotations[`${line.label}Line`] = {
+                    type: 'line',
+                    scaleID: 'x',
+                    value: line.position,
+                    borderColor: line.color,
+                    borderWidth: 2,
+                    label: {
+                        enabled: false // Labels are drawn by the custom plugin, so disable here
+                    }
+                };
+            });
+
+            // Define the custom plugin for drawing labels above the graph
+            const customLabelPlugin = {
+                id: 'customLabelPlugin',
+                beforeDraw(chart) {
+                    const { ctx, chartArea } = chart;
+                    ctx.save();
+
+                    // Draw vertical line labels above the chart
+                    verticalLines.forEach(line => {
+                        const xPosition = chart.scales.x.getPixelForValue(line.position);
+
+                        // Draw text above the chart
+                        ctx.fillStyle = line.color;
+                        ctx.font = '12px Arial'; // Adjust font size
+                        ctx.textAlign = 'center';
+                        ctx.fillText(line.label, xPosition, chartArea.top - 20); // Position labels higher
+                    });
+
+                    ctx.restore();
+                }
+            };
+
             window.altitudeChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: timeInMinutes,
                     datasets: [{
-                        label: 'Altitude',
                         data: data.altitudes,
                         borderColor: 'blue',
-                        borderWidth: 1,       // Thinner line
-                        pointRadius: 0,       // Remove data point circles
+                        borderWidth: 1, // Thinner line
+                        pointRadius: 0, // Remove data point circles
                         fill: false,
-                        tension: 0.4  // Smooth curves
+                        tension: 0.4 // Smooth curves
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    aspectRatio: 2,  // Set aspect ratio to 2:1 (width:height)
+                    aspectRatio: 2, // Set aspect ratio to 2:1 (width:height)
+                    layout: {
+                        padding: {
+                            top: 50 // Increase top padding for labels
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false // Disable legend to remove "undefined" rectangle
+                        },
+                        annotation: {
+                            annotations: annotations
+                        }
+                    },
                     scales: {
                         y: {
                             title: { display: true, text: 'Altitude (°)' }
@@ -254,93 +311,25 @@
                         x: {
                             title: { display: true, text: 'Local Time (HH)' },
                             ticks: {
-                                callback: function(value, index) {
-                                    // Convert minutes since start time back to local hours
+                                callback: function (value, index) {
                                     const hour = Math.floor((timeInMinutes[index] + firstTimeInMinutes) / 60) % 24;
-                                    // Only label the full hours
                                     return (timeInMinutes[index] % 60 === 0) ? `${hour}` : '';
                                 },
                                 autoSkip: false,
-                                maxRotation: 0,
-                                stepSize: 30 // Ensure grid lines are spaced every 30 minutes
+                                maxRotation: 0
                             },
                             grid: {
-                                drawTicks: true,
-                                drawOnChartArea: true,
-                                color: function(context) {
-                                    // Grid lines on the hour and half-hour only
+                                color: function (context) {
                                     return (timeInMinutes[context.tick.value] % 30 === 0) ? '#cccccc' : 'transparent';
-
                                 },
-                                borderDash: function(context) {
+                                borderDash: function (context) {
                                     return (timeInMinutes[context.tick.value] % 60 === 0) ? [] : [5, 5];
                                 }
                             }
                         }
-                    },
-                    plugins: {
-                        annotation: {
-                            annotations: {
-                                sunsetLine: {
-                                    type: 'line',
-                                    scaleID: 'x',
-                                    value: sunsetMinutes,
-                                    borderColor: 'orange',
-                                    borderWidth: 2,
-                                    label: { enabled: true, content: 'Sunset' }
-                                },
-                                sunriseLine: {
-                                    type: 'line',
-                                    scaleID: 'x',
-                                    value: sunriseMinutes,
-                                    borderColor: 'orange',
-                                    borderWidth: 2,
-                                    label: { enabled: true, content: 'Sunrise' }
-                                },
-                                dawnLine: {
-                                    type: 'line',
-                                    scaleID: 'x',
-                                    value: dawnMinutes,
-                                    borderColor: 'purple',
-                                    borderWidth: 2,
-                                    label: { enabled: true, content: 'Astronomical Dawn' }
-                                },
-                                duskLine: {
-                                    type: 'line',
-                                    scaleID: 'x',
-                                    value: duskMinutes,
-                                    borderColor: 'purple',
-                                    borderWidth: 2,
-                                    label: { enabled: true, content: 'Astronomical Dusk' }
-                                },
-                                transitLine: {
-                                    type: 'line',
-                                    scaleID: 'x',
-                                    value: transitMinutes,
-                                    borderColor: 'red',
-                                    borderWidth: 2,
-                                    label: { enabled: true, content: 'Transit' }
-                                },
-                                midnightLine: {
-                                    type: 'line',
-                                    scaleID: 'x',
-                                    value: midnightMinutes,
-                                    borderColor: 'gray',
-                                    borderWidth: 2,
-                                    label: { enabled: true, content: 'Midnight' }
-                                },
-                                maxAltitudeLine: {
-                                    type: 'line',
-                                    scaleID: 'y',
-                                    value: data.max_altitude,
-                                    borderColor: 'green',
-                                    borderWidth: 2,
-                                    label: { enabled: true, content: 'Max Altitude' }
-                                }
-                            }
-                        }
                     }
-                }
+                },
+                plugins: [customLabelPlugin]
             });
         }
 
