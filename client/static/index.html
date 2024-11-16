@@ -173,7 +173,7 @@
                 if (!response.ok) throw new Error('Failed to fetch altitude data');
 
                 const data = await response.json();
-                showAltitudeGraph(data);
+                showAltitudeGraph(object, data);
             } catch (error) {
                 console.error("Error fetching altitude data:", error);
             }
@@ -191,7 +191,11 @@
             return totalMinutes;
         }
 
-        function showAltitudeGraph(data) {
+        function showAltitudeGraph(object, data) {
+            // Set the modal title dynamically
+            const titleElement = document.getElementById('chartTitle');
+            titleElement.textContent = `${object.Name.replace(/\s+/g, ' ').trim()} - Transit Time: ${data.transit_time}`;
+
             // Display the graph modal
             document.getElementById('graphModal').style.display = 'block';
 
@@ -220,7 +224,7 @@
                 return totalMinutes - firstTimeInMinutes;
             });
 
-            // Map event times (sunset, sunrise, etc.) to minutes from the first time, scaled for 10-minute intervals
+            // Map event times (dawn, dusk, etc.) to minutes from the first time, scaled for 10-minute intervals
             const sunsetMinutes = (parseTimeToMinutes(data.sunset, firstTimeInMinutes) - firstTimeInMinutes) / 10;
             const sunriseMinutes = (parseTimeToMinutes(data.sunrise, firstTimeInMinutes) - firstTimeInMinutes) / 10;
             const dawnMinutes = (parseTimeToMinutes(data.astronomical_dawn, firstTimeInMinutes) - firstTimeInMinutes) / 10;
@@ -229,89 +233,168 @@
             const midnightMinutes = ((24 * 60 - firstTimeInMinutes) % 1440) / 10; // Calculate midnight position
 
             const verticalLines = [
-                { position: sunsetMinutes, label: 'Sunset', color: 'orange' },
-                { position: sunriseMinutes, label: 'Sunrise', color: 'orange' },
-                { position: dawnMinutes, label: 'Dawn', color: 'purple' },
-                { position: duskMinutes, label: 'Dusk', color: 'purple' },
                 { position: transitMinutes, label: 'Transit', color: 'red' },
-                { position: midnightMinutes, label: 'Midnight', color: 'gray' },
+                { position: midnightMinutes, label: 'Midnight', color: 'green' },
             ];
 
-            // Define the annotation plugin configuration
-            const annotations = {};
-            verticalLines.forEach(line => {
-                annotations[`${line.label}Line`] = {
-                    type: 'line',
-                    scaleID: 'x',
-                    value: line.position,
-                    borderColor: line.color,
-                    borderWidth: 2,
-                    label: {
-                        enabled: false // Labels are drawn by the custom plugin, so disable here
-                    }
-                };
-            });
-
-            // Define the custom plugin for drawing labels above the graph
-            const customLabelPlugin = {
-                id: 'customLabelPlugin',
+            // Custom plugin for shading, vertical lines, and plot adjustments
+// Define the custom plugin for dynamic shading, grid, and labels
+            const customPlugin = {
+                id: 'customPlugin',
                 beforeDraw(chart) {
-                    const { ctx, chartArea } = chart;
+                    const { ctx, chartArea, scales } = chart;
                     ctx.save();
 
-                    // Draw vertical line labels above the chart
-                    verticalLines.forEach(line => {
-                        const xPosition = chart.scales.x.getPixelForValue(line.position);
+                    // Shading for sunset to dusk, dawn to sunrise, and black for night
+                    const drawBackground = (start, end, color) => {
+                        const startX = scales.x.getPixelForValue(start);
+                        const endX = scales.x.getPixelForValue(end);
+                        ctx.fillStyle = color;
+                        ctx.fillRect(startX, chartArea.top, endX - startX, chartArea.bottom - chartArea.top);
+                    };
 
-                        // Draw text above the chart
+                    const drawGradient = (start, end, gradient) => {
+                        const startX = scales.x.getPixelForValue(start);
+                        const endX = scales.x.getPixelForValue(end);
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(startX, chartArea.top, endX - startX, chartArea.bottom - chartArea.top);
+                    };
+
+                    // Gradient for sunset to dusk
+                    const lightToDarkGradient = ctx.createLinearGradient(
+                        scales.x.getPixelForValue(sunsetMinutes),
+                        0,
+                        scales.x.getPixelForValue(duskMinutes),
+                        0
+                    );
+                    lightToDarkGradient.addColorStop(0, '#d3d3d3');
+                    lightToDarkGradient.addColorStop(1, '#404040');
+                    drawGradient(sunsetMinutes, duskMinutes, lightToDarkGradient);
+
+                    // Gradient for dawn to sunrise
+                    const darkToLightGradient = ctx.createLinearGradient(
+                        scales.x.getPixelForValue(dawnMinutes),
+                        0,
+                        scales.x.getPixelForValue(sunriseMinutes),
+                        0
+                    );
+                    darkToLightGradient.addColorStop(0, '#404040');
+                    darkToLightGradient.addColorStop(1, '#d3d3d3');
+                    drawGradient(dawnMinutes, sunriseMinutes, darkToLightGradient);
+
+                    // Black shading for dusk to dawn
+                    drawBackground(duskMinutes, dawnMinutes, 'black');
+
+                    // Vertical lines for Transit and Midnight
+                    const verticalLines = [
+                        { position: transitMinutes, label: 'Transit', color: 'red' },
+                        { position: midnightMinutes, label: 'Midnight', color: 'green' }
+                    ];
+
+                    verticalLines.forEach(line => {
+                        const xPosition = scales.x.getPixelForValue(line.position);
+
+                        // Draw vertical line
+                        ctx.beginPath();
+                        ctx.moveTo(xPosition, chartArea.top);
+                        ctx.lineTo(xPosition, chartArea.bottom);
+                        ctx.strokeStyle = line.color;
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Draw label above the chart
                         ctx.fillStyle = line.color;
-                        ctx.font = '12px Arial'; // Adjust font size
+                        ctx.font = '12px Arial';
                         ctx.textAlign = 'center';
-                        ctx.fillText(line.label, xPosition, chartArea.top - 20); // Position labels higher
+                        ctx.fillText(line.label, xPosition, chartArea.top - 10);
                     });
+
+                    // Horizontal line at 0 altitude
+                    const yZero = scales.y.getPixelForValue(0);
+                    ctx.beginPath();
+                    ctx.moveTo(chartArea.left, yZero);
+                    ctx.lineTo(chartArea.right, yZero);
+                    ctx.strokeStyle = 'green';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+
+                    ctx.restore();
+                },
+                beforeDatasetsDraw(chart) {
+                    const { ctx, chartArea, scales } = chart;
+                    const data = chart.data.datasets[0].data;
+
+                    ctx.save();
+
+                    for (let i = 0; i < data.length - 1; i++) {
+                        const xStart = scales.x.getPixelForValue(i);
+                        const yStart = scales.y.getPixelForValue(data[i]);
+                        const xEnd = scales.x.getPixelForValue(i + 1);
+                        const yEnd = scales.y.getPixelForValue(data[i + 1]);
+
+                        // Determine the zone for the segment
+                        const isDarkZone = i >= duskMinutes && i <= dawnMinutes;
+                        ctx.strokeStyle = isDarkZone ? '#ffffff' : '#d3d3d3';
+                        ctx.stroke();
+
+                        // Draw the segment
+                        ctx.beginPath();
+                        ctx.moveTo(xStart, yStart);
+                        ctx.lineTo(xEnd, yEnd);
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
 
                     ctx.restore();
                 }
             };
 
+            // Chart.js Configuration
             window.altitudeChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: timeInMinutes,
                     datasets: [{
                         data: data.altitudes,
-                        borderColor: 'blue',
-                        borderWidth: 1, // Thinner line
-                        pointRadius: 0, // Remove data point circles
+                        borderWidth: 1,
+                        pointRadius: 0, // Remove circles on plot points
+                        borderColor: 'transparent',
+                        /*
+                        borderColor: function(context) {
+                            const xValue = context.dataIndex/10;
+                            return (xValue >= duskMinutes && xValue <= dawnMinutes) ? '#ffffff' : '#ffffff'; // Light gray in dark zone
+                        },
+                        */
                         fill: false,
-                        tension: 0.4 // Smooth curves
+                        tension: 0.4
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    aspectRatio: 2, // Set aspect ratio to 2:1 (width:height)
+                    aspectRatio: 2,
                     layout: {
                         padding: {
-                            top: 50 // Increase top padding for labels
+                            top: 20 // Add space above the graph for labels
                         }
                     },
                     plugins: {
-                        legend: {
-                            display: false // Disable legend to remove "undefined" rectangle
-                        },
-                        annotation: {
-                            annotations: annotations
-                        }
+                        legend: { display: false },
                     },
                     scales: {
                         y: {
-                            title: { display: true, text: 'Altitude (°)' }
+                            title: { display: true, text: 'Altitude (°)' },
+                            grid: {
+                                color: function(context) {
+                                    const minutes = timeInMinutes[context.tick.value];
+                                    return (minutes >= duskMinutes && minutes <= dawnMinutes) ? '#404040' : '#404040';
+                                }
+                            }
                         },
                         x: {
                             title: { display: true, text: 'Local Time (HH)' },
                             ticks: {
-                                callback: function (value, index) {
+                                callback: function(value, index) {
                                     const hour = Math.floor((timeInMinutes[index] + firstTimeInMinutes) / 60) % 24;
                                     return (timeInMinutes[index] % 60 === 0) ? `${hour}` : '';
                                 },
@@ -319,17 +402,26 @@
                                 maxRotation: 0
                             },
                             grid: {
-                                color: function (context) {
-                                    return (timeInMinutes[context.tick.value] % 30 === 0) ? '#cccccc' : 'transparent';
+                                color: function(context) {
+                                    const minutes = timeInMinutes[context.tick.value];
+                                    // Determine whether the grid line is between dusk and dawn
+                                    const isNight = minutes/10 >= duskMinutes && minutes/10 <= dawnMinutes;
+
+                                    // Return color based on whether it's night or day
+                                    if (minutes % 30 === 0) {
+                                        return isNight ? '#404040' : '#808080'; // Dark gray for night, light gray for day
+                                    }
+                                    return 'transparent'; // Hide grid lines not on 30-minute intervals
                                 },
-                                borderDash: function (context) {
-                                    return (timeInMinutes[context.tick.value] % 60 === 0) ? [] : [5, 5];
+                                borderDash: function(context) {
+                                    const minutes = timeInMinutes[context.tick.value];
+                                    return (minutes % 60 === 0) ? [] : [5, 5];
                                 }
                             }
                         }
                     }
                 },
-                plugins: [customLabelPlugin]
+                plugins: [customPlugin]
             });
         }
 
@@ -433,6 +525,7 @@
     <div id="graphModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="chartTitle" class="chart-title"></h3> <!-- Title outside the chart -->
             <canvas id="altitudeChart"></canvas>
         </div>
     </div>
