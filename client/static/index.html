@@ -655,20 +655,14 @@
         <div id="graphOption" style="padding: 8px; cursor: pointer;">Graph</div>
     </div>
 
-    <div id="loadingPopup" style="
-        display: none;
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background-color: white;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        padding: 20px;
-        text-align: center;
-        box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.3);
-        z-index: 2000;">
+    <div id="loadingPopup">
+        <div class="loading-icon"></div>
         <p>Loading data, please wait...</p>
+        <div class="help-text">
+            <p class="tip"><strong>Tip:</strong> Double-click to go to Astrobin</p>
+            <p class="tip"><strong>Tip:</strong> Right-click to show an altitude graph</p>
+            <p class="note"><strong>Note:</strong> Loading a large catalog (e.g., 10,000 objects) may take 10+ seconds.</p>
+        </div>
     </div>
 </body>
 </html>
