@@ -198,6 +198,8 @@ canvas#altitudeChart {
     height: auto !important;
     aspect-ratio: 2 / 1; /* Enforce a 2:1 aspect ratio */
     border-radius: 8px;
+    background-color: transparent;
+
 }
 
 /* Close button styling for modal */
@@ -209,6 +211,16 @@ canvas#altitudeChart {
     font-weight: bold;
     cursor: pointer;
     color: #333;
+}
+
+.chart-title {
+    text-align: center;
+    font-size: 16px;
+    font-weight: normal; /* Make the title less bold */
+    margin: 0;
+    padding: 5px 0; /* Add padding if needed */
+    background-color: #f0f0f0; /* Optional: Give it a background */
+    border-bottom: 1px solid #ccc; /* Optional: Add a subtle border */
 }
 
 /* Context menu styling */

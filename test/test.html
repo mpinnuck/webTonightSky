@@ -2,104 +2,32 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TonightSky API Test</title>
+    <title>Color Preview</title>
     <style>
-        table {
-            width: 100%;
-            border-collapse: collapse;
+        .color-box {
+            width: 100px;
+            height: 100px;
+            display: inline-block;
+            margin: 10px;
+            border: 1px solid black;
         }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-        }
-        th {
-            background-color: #f2f2f2;
-            text-align: left;
-        }
-        /* Increase the width of the query input */
-        #query {
-            width: 50%;  /* Set width to 50% of the page */
-            padding: 8px;
-            margin-top: 10px;
-        }
+        .color-1 { background-color: #e6e6e6; } /* Light grey */
+        .color-2 { background-color: #f0f0f0; } /* Lighter grey */
+        .color-3 { background-color: hsl(0, 0%, 95%); } /* Very light grey */
+        .color-4 { background-color: hsl(0, 0%, 97%); } /* Nearly white */
     </style>
 </head>
 <body>
-    <h1>TonightSky API Test</h1>
-
-    <!-- Wider Query Input -->
-    <label for="query">Enter Query Filter:</label><br>
-    <input type="text" id="query" placeholder="e.g., altitude > 30 AND transit time < 02">
-    <button onclick="testAPI()">Test API Request</button>
-
-    <!-- Table Output -->
-    <div id="output"></div>
-
+    <h1>Color Preview</h1>
+    <div class="color-box color-1"></div>
+    <div class="color-box color-2"></div>
+    <div class="color-box color-3"></div>
+    <div class="color-box color-4"></div>
+    <p>Hover over the boxes to see their color codes in the console.</p>
     <script>
-        function testAPI() {
-            // Retrieve the query filter from the input field
-            const queryFilter = document.getElementById("query").value;
-
-            fetch("http://127.0.0.1:5000/api/list_objects", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    latitude: "-33.713611",
-                    longitude: "151.090278",
-                    date: "2024-11-07",
-                    local_time: "22:00",
-                    timezone: "Australia/Sydney",
-                    filter_expression: queryFilter,  // Add filter_expression from input
-                    catalogs: {
-                        Messier: true,
-                        NGC: true,
-                        IC: false,
-                        Caldwell: false,
-                        Abell: false,
-                        Sharpless: false
-                    }
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                const outputDiv = document.getElementById("output");
-                outputDiv.innerHTML = "";  // Clear previous results
-
-                // Create a table and add headers
-                const table = document.createElement("table");
-                const headerRow = document.createElement("tr");
-                
-                // Define the columns to display
-                const columns = ["Name", "Altitude", "Altitude", "Azimuth", "Before/After", "Catalog", "Dec", 
-                                 "Info", "Magnitude", "RA", "Relative TT", "Transit Time", "Type"];
-                
-                columns.forEach(column => {
-                    const th = document.createElement("th");
-                    th.textContent = column;
-                    headerRow.appendChild(th);
-                });
-                table.appendChild(headerRow);
-
-                // Populate the table with data
-                data.forEach(item => {
-                    const row = document.createElement("tr");
-                    
-                    columns.forEach(column => {
-                        const cell = document.createElement("td");
-                        cell.textContent = item[column] || "";  // Display the value or an empty string if undefined
-                        row.appendChild(cell);
-                    });
-
-                    table.appendChild(row);
-                });
-
-                outputDiv.appendChild(table);
-            })
-            .catch(error => console.error("Error:", error));
-        }
+        document.querySelectorAll('.color-box').forEach(box => {
+            box.addEventListener('mouseover', () => console.log(getComputedStyle(box).backgroundColor));
+        });
     </script>
 </body>
 </html>

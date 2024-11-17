@@ -7,6 +7,13 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.2.1"></script>
     <script>
+        // constants
+        const HORIZON_ALTITUDE = 25; // Constant for the horizontal line altitude
+        // Define constants for gradient start and end colors
+        const GRADIENT_LIGHT = '#f8f8f8'; // Light gradient color
+        const GRADIENT_DARK = '#101010';  // Dark gradient color
+        ////////
+
         document.addEventListener('DOMContentLoaded', () => {
             const dateField = document.getElementById('date');
             const timeField = document.getElementById('local_time');
@@ -194,7 +201,8 @@
         function showAltitudeGraph(object, data) {
             // Set the modal title dynamically
             const titleElement = document.getElementById('chartTitle');
-            titleElement.textContent = `${object.Name.replace(/\s+/g, ' ').trim()} - Transit Time: ${data.transit_time}`;
+            const maxAltitude = Math.max(...data.altitudes); // Calculate the max altitude
+            titleElement.textContent = `${object.Name.replace(/\s+/g, ' ').trim()} - Transit Time: ${data.transit_time} - Apex: ${maxAltitude.toFixed(1)}°`;
 
             // Display the graph modal
             document.getElementById('graphModal').style.display = 'block';
@@ -238,26 +246,27 @@
             ];
 
             // Custom plugin for shading, vertical lines, and plot adjustments
-// Define the custom plugin for dynamic shading, grid, and labels
+            // Define the custom plugin for dynamic shading, grid, and labels
             const customPlugin = {
                 id: 'customPlugin',
                 beforeDraw(chart) {
                     const { ctx, chartArea, scales } = chart;
+                    const { left, right, top, bottom } = chartArea;
                     ctx.save();
 
-                    // Shading for sunset to dusk, dawn to sunrise, and black for night
+                    // Shading for background
                     const drawBackground = (start, end, color) => {
                         const startX = scales.x.getPixelForValue(start);
                         const endX = scales.x.getPixelForValue(end);
                         ctx.fillStyle = color;
-                        ctx.fillRect(startX, chartArea.top, endX - startX, chartArea.bottom - chartArea.top);
+                        ctx.fillRect(startX, top, endX - startX, bottom - top);
                     };
 
                     const drawGradient = (start, end, gradient) => {
                         const startX = scales.x.getPixelForValue(start);
                         const endX = scales.x.getPixelForValue(end);
                         ctx.fillStyle = gradient;
-                        ctx.fillRect(startX, chartArea.top, endX - startX, chartArea.bottom - chartArea.top);
+                        ctx.fillRect(startX, top, endX - startX, bottom - top);
                     };
 
                     // Gradient for sunset to dusk
@@ -267,8 +276,8 @@
                         scales.x.getPixelForValue(duskMinutes),
                         0
                     );
-                    lightToDarkGradient.addColorStop(0, '#d3d3d3');
-                    lightToDarkGradient.addColorStop(1, '#404040');
+                    lightToDarkGradient.addColorStop(0, GRADIENT_LIGHT);
+                    lightToDarkGradient.addColorStop(1, GRADIENT_DARK);
                     drawGradient(sunsetMinutes, duskMinutes, lightToDarkGradient);
 
                     // Gradient for dawn to sunrise
@@ -278,17 +287,19 @@
                         scales.x.getPixelForValue(sunriseMinutes),
                         0
                     );
-                    darkToLightGradient.addColorStop(0, '#404040');
-                    darkToLightGradient.addColorStop(1, '#d3d3d3');
+                    darkToLightGradient.addColorStop(0, GRADIENT_DARK);
+                    darkToLightGradient.addColorStop(1, GRADIENT_LIGHT);
                     drawGradient(dawnMinutes, sunriseMinutes, darkToLightGradient);
 
                     // Black shading for dusk to dawn
                     drawBackground(duskMinutes, dawnMinutes, 'black');
 
-                    // Vertical lines for Transit and Midnight
+                    // Draw vertical lines for Transit and Midnight
                     const verticalLines = [
                         { position: transitMinutes, label: 'Transit', color: 'red' },
-                        { position: midnightMinutes, label: 'Midnight', color: 'green' }
+                        { position: midnightMinutes, label: 'Midnight', color: 'green' },
+                        { position: duskMinutes, label: 'Dusk', color: 'rgba(0, 0, 255, 0.4)' },
+                        { position: dawnMinutes, label: 'Dawn', color: 'rgba(0, 0, 255, 0.4)' }
                     ];
 
                     verticalLines.forEach(line => {
@@ -296,8 +307,8 @@
 
                         // Draw vertical line
                         ctx.beginPath();
-                        ctx.moveTo(xPosition, chartArea.top);
-                        ctx.lineTo(xPosition, chartArea.bottom);
+                        ctx.moveTo(xPosition, top);
+                        ctx.lineTo(xPosition, bottom);
                         ctx.strokeStyle = line.color;
                         ctx.lineWidth = 2;
                         ctx.stroke();
@@ -306,25 +317,57 @@
                         ctx.fillStyle = line.color;
                         ctx.font = '12px Arial';
                         ctx.textAlign = 'center';
-                        ctx.fillText(line.label, xPosition, chartArea.top - 10);
+                        ctx.fillText(line.label, xPosition, top - 10);
                     });
 
-                    // Horizontal line at 0 altitude
-                    const yZero = scales.y.getPixelForValue(0);
-                    ctx.beginPath();
-                    ctx.moveTo(chartArea.left, yZero);
-                    ctx.lineTo(chartArea.right, yZero);
-                    ctx.strokeStyle = 'green';
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
+                    // Horizontal grid lines dynamically
+                    const yTicks = scales.y.ticks;
 
-                    ctx.restore();
-                },
-                beforeDatasetsDraw(chart) {
-                    const { ctx, chartArea, scales } = chart;
+                    yTicks.forEach((tick) => {
+                        const yPosition = scales.y.getPixelForValue(tick.value);
+
+                        // Daytime: left to dusk
+                        ctx.beginPath();
+                        ctx.moveTo(left, yPosition);
+                        ctx.lineTo(scales.x.getPixelForValue(duskMinutes), yPosition);
+                        ctx.strokeStyle = '#808080'; // Light gray for daytime
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+
+                        // Nighttime: dusk to dawn
+                        ctx.beginPath();
+                        ctx.moveTo(scales.x.getPixelForValue(duskMinutes), yPosition);
+                        ctx.lineTo(scales.x.getPixelForValue(dawnMinutes), yPosition);
+                        ctx.strokeStyle = '#404040'; // Dark gray for nighttime
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+
+                        // Daytime: dawn to right
+                        ctx.beginPath();
+                        ctx.moveTo(scales.x.getPixelForValue(dawnMinutes), yPosition);
+                        ctx.lineTo(right, yPosition);
+                        ctx.strokeStyle = '#808080'; // Light gray for daytime
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    });
+
+                    // Add a thick horizontal line at HORIZON_ALTITUDE degrees altitude
+                    // Define constants
+                    const maxAltitude = scales.y.max; // Maximum value of the y-axis
+
+                    // Draw horizontal line at HORIZON_ALTITUDE if within the visible range
+                    if (HORIZON_ALTITUDE <= maxAltitude) {
+                        const yHorizon = scales.y.getPixelForValue(HORIZON_ALTITUDE);
+                        ctx.beginPath();
+                        ctx.moveTo(chartArea.left, yHorizon);
+                        ctx.lineTo(chartArea.right, yHorizon);
+                        ctx.strokeStyle = 'green';
+                        ctx.lineWidth = 2; // Thicker line
+                        ctx.stroke();
+                    }
+
+                    // Draw plot line dynamically
                     const data = chart.data.datasets[0].data;
-
-                    ctx.save();
 
                     for (let i = 0; i < data.length - 1; i++) {
                         const xStart = scales.x.getPixelForValue(i);
@@ -334,10 +377,9 @@
 
                         // Determine the zone for the segment
                         const isDarkZone = i >= duskMinutes && i <= dawnMinutes;
-                        ctx.strokeStyle = isDarkZone ? '#ffffff' : '#d3d3d3';
-                        ctx.stroke();
+                        const isBelowHorizon = data[i] < HORIZON_ALTITUDE || data[i + 1] < HORIZON_ALTITUDE;
+                        ctx.strokeStyle = isBelowHorizon ? '#c0c0c0' : isDarkZone ? '#ffffff' : '#c0c0c0'; // Adjust colors dynamically
 
-                        // Draw the segment
                         ctx.beginPath();
                         ctx.moveTo(xStart, yStart);
                         ctx.lineTo(xEnd, yEnd);
@@ -385,10 +427,8 @@
                         y: {
                             title: { display: true, text: 'Altitude (°)' },
                             grid: {
-                                color: function(context) {
-                                    const minutes = timeInMinutes[context.tick.value];
-                                    return (minutes >= duskMinutes && minutes <= dawnMinutes) ? '#404040' : '#404040';
-                                }
+                                color: 'transparent', // Prevent Chart.js from drawing default grid lines
+                                drawTicks: false,     // Optional: Prevent ticks on the grid if you want full control
                             }
                         },
                         x: {
