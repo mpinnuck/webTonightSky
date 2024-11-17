@@ -242,3 +242,18 @@ canvas#altitudeChart {
 #contextMenu div:hover {
     background-color: #e9e9e9;
 }
+
+#helpPanel {
+    position: absolute;
+    top: 10px; /* Adjust to fit your form layout */
+    right: 10px; /* Adjust to fit your form layout */
+    width: 200px; /* Fixed width for the panel */
+    background-color: #f9f9f9;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    color: #333;
+}
