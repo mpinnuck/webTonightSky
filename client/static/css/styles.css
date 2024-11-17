@@ -176,6 +176,7 @@ fieldset label {
     left: 50%;
     transform: translate(-50%, -50%);
     width: auto;
+    max-height: 90vh;
     max-width: 700px;
     height: auto;
     background-color: white;

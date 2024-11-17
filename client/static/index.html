@@ -12,6 +12,9 @@
         // Define constants for gradient start and end colors
         const GRADIENT_LIGHT = '#f8f8f8'; // Light gradient color
         const GRADIENT_DARK = '#101010';  // Dark gradient color
+        const GRID_DAY = '#808080';  // Dark gradient color
+        const GRID_NIGHT = '#404040';  // Dark gradient color
+
         ////////
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -330,7 +333,7 @@
                         ctx.beginPath();
                         ctx.moveTo(left, yPosition);
                         ctx.lineTo(scales.x.getPixelForValue(duskMinutes), yPosition);
-                        ctx.strokeStyle = '#808080'; // Light gray for daytime
+                        ctx.strokeStyle = GRID_DAY; // Light gray for daytime
                         ctx.lineWidth = 1;
                         ctx.stroke();
 
@@ -338,7 +341,7 @@
                         ctx.beginPath();
                         ctx.moveTo(scales.x.getPixelForValue(duskMinutes), yPosition);
                         ctx.lineTo(scales.x.getPixelForValue(dawnMinutes), yPosition);
-                        ctx.strokeStyle = '#404040'; // Dark gray for nighttime
+                        ctx.strokeStyle = GRID_NIGHT; // Dark gray for nighttime
                         ctx.lineWidth = 1;
                         ctx.stroke();
 
@@ -346,7 +349,7 @@
                         ctx.beginPath();
                         ctx.moveTo(scales.x.getPixelForValue(dawnMinutes), yPosition);
                         ctx.lineTo(right, yPosition);
-                        ctx.strokeStyle = '#808080'; // Light gray for daytime
+                        ctx.strokeStyle = GRID_DAY; // Light gray for daytime
                         ctx.lineWidth = 1;
                         ctx.stroke();
                     });
@@ -365,6 +368,39 @@
                         ctx.lineWidth = 2; // Thicker line
                         ctx.stroke();
                     }
+
+                    // Draw custom x-axis ticks and grid lines
+                    // Loop through ticks to draw custom grid and labels
+                    const labelPadding = 20; // Space below the graph for labels
+                    timeInMinutes.forEach((minute, index) => {
+                        const xPosition = scales.x.getPixelForValue(index);
+
+                        // Only draw vertical grid lines at hourly intervals
+                        if (minute % 60 === 0) {
+                            const isNight = minute >= duskMinutes && minute <= dawnMinutes;
+
+                            // Draw vertical line
+                            ctx.beginPath();
+                            ctx.moveTo(xPosition, top);
+                            ctx.lineTo(xPosition, bottom);
+                            ctx.strokeStyle = isNight ? GRID_NIGHT : GRID_DAY; // Dark gray for night, light gray for day
+                            ctx.lineWidth = 1;
+                            ctx.stroke();
+
+                            // Draw x-axis hour labels
+                            const hour = Math.floor((minute + firstTimeInMinutes) / 60) % 24;
+                            ctx.fillStyle = '#808080'; // Text color
+                            ctx.font = '12px Arial'; // Adjust font size if necessary
+                            ctx.textAlign = 'center';
+                            ctx.fillText(`${hour}`, xPosition, bottom + labelPadding); // Position below the axis
+                        }
+                    });
+                    // Draw x-axis title
+                    ctx.font = '14px Arial';
+                    ctx.fillStyle = '#808080'; // Light gray text color for title
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Local Time (HH)', (chartArea.left + chartArea.right) / 2, chartArea.bottom + 35);
+
 
                     // Draw plot line dynamically
                     const data = chart.data.datasets[0].data;
@@ -417,7 +453,9 @@
                     aspectRatio: 2,
                     layout: {
                         padding: {
-                            top: 20 // Add space above the graph for labels
+                            top: 25, // Add space above the graph for labels
+                            bottom: 35,
+                            right: 10
                         }
                     },
                     plugins: {
@@ -432,31 +470,11 @@
                             }
                         },
                         x: {
-                            title: { display: true, text: 'Local Time (HH)' },
-                            ticks: {
-                                callback: function(value, index) {
-                                    const hour = Math.floor((timeInMinutes[index] + firstTimeInMinutes) / 60) % 24;
-                                    return (timeInMinutes[index] % 60 === 0) ? `${hour}` : '';
-                                },
-                                autoSkip: false,
-                                maxRotation: 0
-                            },
+                            display: false,
+                            title: { display: false, text: 'Local Time (HH)' },
                             grid: {
-                                color: function(context) {
-                                    const minutes = timeInMinutes[context.tick.value];
-                                    // Determine whether the grid line is between dusk and dawn
-                                    const isNight = minutes/10 >= duskMinutes && minutes/10 <= dawnMinutes;
-
-                                    // Return color based on whether it's night or day
-                                    if (minutes % 30 === 0) {
-                                        return isNight ? '#404040' : '#808080'; // Dark gray for night, light gray for day
-                                    }
-                                    return 'transparent'; // Hide grid lines not on 30-minute intervals
-                                },
-                                borderDash: function(context) {
-                                    const minutes = timeInMinutes[context.tick.value];
-                                    return (minutes % 60 === 0) ? [] : [5, 5];
-                                }
+                                color: 'transparent', // Prevent Chart.js from drawing default grid lines
+                                drawTicks: false,     // Optional: Prevent ticks on the grid if you want full control
                             }
                         }
                     }
