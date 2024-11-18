@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask import Response, stream_with_context
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import pytz
@@ -9,13 +10,14 @@ from astropy.time import Time
 import astropy.units as u
 import logging
 from astroplan import Observer, FixedTarget
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("TonightSky")
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 csv_filename = './data/celestial_catalog.csv'
 
@@ -35,6 +37,10 @@ table_headers = {
     "Info": "Info",
     "Catalog": "Catalog"
 }
+
+@app.route('/')
+def home():
+    return "TonightSky app is running!", 200
 
 # Utility function to convert RA from HH:MM:SS to decimal degrees
 def ra_to_degrees(ra_str):
@@ -218,9 +224,20 @@ def evaluate_conditions(row, conditions):
             return False
     return True
 
+from flask import Response, stream_with_context
+
 @app.route('/api/list_objects', methods=['POST'])
 def list_objects():
+    # Handle OPTIONS preflight request
+    if request.method == 'OPTIONS':
+        response = Response()
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response, 200  # Return a 200 OK for preflight
+
     try:
+        logger.debug("Processing request to /api/list_objects")
         data = request.json
         latitude = float(data['latitude'])
         longitude = float(data['longitude'])
@@ -230,75 +247,99 @@ def list_objects():
         filter_expression = data.get("filter_expression", "")
         catalog_filters = data.get("catalogs", {})
 
-        objects = []
-        with open(csv_filename, mode='r', encoding='ISO-8859-1') as file:
-            reader = csv.DictReader(file)
+        logger.debug(f"Latitude: {latitude}, Longitude: {longitude}, Local Time: {local_time}")
+        logger.debug(f"Filter Expression: {filter_expression}")
+        logger.debug(f"Catalog Filters: {catalog_filters}")
 
-            # Use table headers as valid columns for the query parser
-            valid_columns = {header.lower(): header for header in table_headers.keys()}
+        # Check if all catalogs are unselected (treat as select all if true)
+        all_catalogs_unselected = all(not selected for selected in catalog_filters.values()) if catalog_filters else True
+        logger.debug(f"All catalogs unselected: {all_catalogs_unselected}")
 
-            # Parse the filter expression into conditions
-            try:
-                conditions = parse_query_conditions(filter_expression, valid_columns) if filter_expression else []
-            except ValueError as e:
-                logger.error(f"Query parsing error: {e}")
-                return jsonify({"error": f"Query parsing error: {e}"}), 400
+        def generate():
+            with open(csv_filename, mode='r', encoding='ISO-8859-1') as file:
+                reader = csv.DictReader(file)
 
-            count = 0  # Initialize a counter for tracking progress
+                # Use table headers as valid columns for the query parser
+                valid_columns = {header.lower(): header for header in table_headers.keys()}
+                logger.debug(f"Valid columns for filtering: {valid_columns}")
 
-            for row in reader:
-                count += 1
-                if count % 500 == 0:
-                    logger.debug(f"Processed {count} rows")
+                # Parse the filter expression into conditions
+                try:
+                    conditions = parse_query_conditions(filter_expression, valid_columns) if filter_expression else []
+                    logger.debug(f"Parsed conditions: {conditions}")
+                except ValueError as e:
+                    logger.error(f"Query parsing error: {e}")
+                    yield json.dumps({"error": f"Query parsing error: {e}"})
+                    return
 
-                # Apply catalog filter (check if the object's catalog is enabled)
-                catalog = row['Catalog'].strip()
-                if catalog_filters and not catalog_filters.get(catalog, False):
-                    continue
+                row_count = 0
+                included_count = 0
 
-                # Calculate transit time and AltAz for each object
-                ra = float(row['RA'])
-                dec = float(row['Dec'])
-                transit_time_minutes, local_transit_time, before_after, altitude, azimuth = calculate_transit_and_alt_az(
-                    ra, dec, latitude, longitude, local_time)
+                for row in reader:
+                    row_count += 1
+                    if row_count % 500 == 0:
+                        logger.debug(f"Processed {row_count} rows...")
 
-                if altitude < 0:
-                    continue
+                    # Apply catalog filter
+                    catalog = row['Catalog'].strip()
+                    if not all_catalogs_unselected and catalog_filters and not catalog_filters.get(catalog, False):
+                        continue
 
-                # Build the full row object for condition evaluation
-                current_row = {
-                    'Name': row['Name'],
-                    'RA': degrees_to_ra(ra),
-                    'Dec': format_dec(dec),
-                    'Transit Time': local_transit_time,
-                    'Relative TT': format_transit_time(transit_time_minutes),
-                    'Before/After': before_after,
-                    'Altitude': f"{altitude:.2f}°",  # Calculated Altitude in degrees
-                    'Azimuth': f"{azimuth:.2f}°",
-                    'Alt Name': row.get('Alt Name', ''),
-                    'Type': row['Type'],
-                    'Magnitude': row['Magnitude'],
-                    'Info': row['Info'],
-                    'Catalog': row['Catalog']
-                }
+                    # Data integrity checks
+                    ra = float(row['RA'])
+                    dec = float(row['Dec'])
 
-                # Evaluate the row against the conditions
-                if evaluate_conditions(current_row, conditions):
-                    objects.append(current_row)
+                    # Calculate transit time and AltAz
+                    transit_time_minutes, local_transit_time, before_after, altitude, azimuth = calculate_transit_and_alt_az(
+                        ra, dec, latitude, longitude, local_time)
 
-        logger.debug(f"Total rows processed: {count}")
-        logger.debug(f"Number of objects returned: {len(objects)}")
-        return jsonify(objects)
+                    if altitude < 0:
+                        continue
+
+                    # Build the row object
+                    current_row = {
+                        'Name': row['Name'],
+                        'RA': degrees_to_ra(ra),
+                        'Dec': format_dec(dec),
+                        'Transit Time': local_transit_time,
+                        'Relative TT': format_transit_time(transit_time_minutes),
+                        'Before/After': before_after,
+                        'Altitude': f"{altitude:.2f}°",
+                        'Azimuth': f"{azimuth:.2f}°",
+                        'Alt Name': row.get('Alt Name', ''),
+                        'Type': row['Type'],
+                        'Magnitude': row['Magnitude'],
+                        'Info': row['Info'],
+                        'Catalog': row['Catalog']
+                    }
+
+                    # Evaluate the row against conditions
+                    if not evaluate_conditions(current_row, conditions):
+                        continue
+
+                    # Log the data being sent
+                    # logger.debug(f"Streaming data: {current_row}\n")
+
+
+                    included_count += 1
+                    yield json.dumps(current_row) + "\n"
+
+                logger.debug(f"Total rows processed: {row_count}")
+                logger.debug(f"Number of objects included in the response: {included_count}")
+                yield ']'  # End JSON array
+
+        return Response(stream_with_context(generate()), content_type='application/json')
 
     except KeyError as e:
         logger.error(f"Missing data field: {e}")
         return jsonify({"error": f"Missing data field: {e}"}), 400
-    except ValueError as e:
-        logger.error(f"Value error: {e}")
-        return jsonify({"error": f"Value error: {e}"}), 400
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         return jsonify({"error": "An unexpected error occurred."}), 500
-
+        
+# Production-ready WSGI configuration
 if __name__ == '__main__':
-    app.run(debug=True)
+    import os
+    # Use Flask's development server only in development mode
+    if os.environ.get('FLASK_ENV') == 'development':
+        app.run(debug=True)

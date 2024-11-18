@@ -8,7 +8,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.2.1"></script>
     <script>
         // constants
-        const APP_SERVER = 'http://127.0.0.1:5000/api/'
+
+        const APP_SERVER = 'http://127.0.0.1:5000/api/';
+        // const APP_SERVER = 'https://app.microconcepts.com.au/tonightsky/api/';
+
         const HORIZON_ALTITUDE = 25; // Constant for the horizontal line altitude
         // Define constants for gradient start and end colors
         const GRADIENT_LIGHT = '#f8f8f8'; // Light gradient color
@@ -17,6 +20,7 @@
         const GRID_NIGHT = '#404040';  // Dark gradient color
 
         ////////
+        console.log(`Using API server: ${APP_SERVER}`);
 
         document.addEventListener('DOMContentLoaded', () => {
             loadSettings(); // Settings are loaded from localStorage
@@ -71,7 +75,108 @@
             }
         }
 
+/////////////////////////////////////////////////////
         async function listObjects() {
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            const date = document.getElementById('date').value;
+            const local_time = document.getElementById('local_time').value;
+            const timezone = document.getElementById('timezone').value;
+            const filter_expression = document.getElementById('filter_expression').value;
+            const catalogs = {};
+            document.querySelectorAll('input[name="catalogs"]').forEach(cb => {
+                catalogs[cb.value] = cb.checked;
+            });
+
+            const tableBody = document.getElementById('resultsTableBody');
+            tableBody.innerHTML = ""; // Clear previous results
+
+            const loadingPopup = document.getElementById('loadingPopup');
+            loadingPopup.style.display = 'block';
+
+            try {
+                const response = await fetch(`${APP_SERVER}list_objects`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ latitude, longitude, date, local_time, timezone, filter_expression, catalogs })
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch data');
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let accumulatedData = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    accumulatedData += decoder.decode(value, { stream: true });
+                    const lines = accumulatedData.split("\n");
+                    accumulatedData = lines.pop(); // Keep incomplete line for the next chunk
+
+                    for (const line of lines) {
+                        if (line.trim()) {
+                            try {
+                                const obj = JSON.parse(line);
+                                appendRow(obj); // Append each row to the table
+                            } catch (e) {
+                                console.error("Error parsing streamed line:", e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                alert("Failed to load objects. Please try again.");
+            } finally {
+                loadingPopup.style.display = 'none';
+            }
+        }
+
+        function appendRow(obj) {
+            const tableBody = document.getElementById('resultsTableBody');
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td>
+                <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td>${obj.Altitude}</td>
+                <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
+                <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
+            `;
+
+            // Add double-click event to open Astrobin link
+            row.addEventListener('dblclick', () => {
+                const objectName = obj.Name.replace(/\s+/g, ''); // Remove spaces for Astrobin search
+                const astrobinUrl = `https://www.astrobin.com/search/?q=${encodeURIComponent(objectName)}`;
+                window.open(astrobinUrl, '_blank');
+            });
+
+            // Add context menu event to show the custom context menu
+            row.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                showContextMenu(event.pageX, event.pageY, obj);
+            });
+
+            tableBody.appendChild(row);
+        }
+
+        function resizeWindowToFitTable() {
+            const table = document.getElementById('resultsTable');
+            const tableWidth = table.offsetWidth;
+            const tableHeight = table.offsetHeight;
+
+            // Set the document's body dimensions to match the table
+            document.body.style.width = tableWidth + 'px';
+            document.body.style.height = tableHeight + 'px';
+
+            // Trigger a window resize event to force the browser to recalculate layout
+            window.dispatchEvent(new Event('resize'));
+        }
+
+///////////////////////////////////////////////////
+
+
+        async function listObjectsX() {
             const latitude = document.getElementById('latitude').value;
             const longitude = document.getElementById('longitude').value;
             const date = document.getElementById('date').value;
@@ -141,6 +246,8 @@
                 tableBody.appendChild(row);
             });
         }
+
+
 
         let sortDirection = 1;
         function sortTableByColumn(columnIndex) {
@@ -617,28 +724,30 @@
         </form>
 
         <!-- Results Table -->
-        <table id="resultsTable">
-            <thead>
-                <tr>
-                    <th onclick="sortTableByColumn(0)">Name</th>
-                    <th onclick="sortTableByColumn(1)">RA</th>
-                    <th onclick="sortTableByColumn(2)">Dec</th>
-                    <th onclick="sortTableByColumn(3)">Transit Time</th>
-                    <th onclick="sortTableByColumn(4)">Relative TT</th>
-                    <th onclick="sortTableByColumn(5)">Before/After</th>
-                    <th onclick="sortTableByColumn(6)">Altitude</th>
-                    <th onclick="sortTableByColumn(7)">Azimuth</th>
-                    <th onclick="sortTableByColumn(8)">Alt Name</th>
-                    <th onclick="sortTableByColumn(9)">Type</th>
-                    <th onclick="sortTableByColumn(10)">Magnitude</th>
-                    <th onclick="sortTableByColumn(11)">Info</th>
-                    <th onclick="sortTableByColumn(12)">Catalog</th>
-                </tr>
-            </thead>
-            <tbody id="resultsTableBody">
-                <!-- Table rows will be appended here by JavaScript -->
-            </tbody>
-        </table>
+        <div id="tableContainer">
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortTableByColumn(0)">Name</th>
+                        <th onclick="sortTableByColumn(1)">RA</th>
+                        <th onclick="sortTableByColumn(2)">Dec</th>
+                        <th onclick="sortTableByColumn(3)">Transit Time</th>
+                        <th onclick="sortTableByColumn(4)">Relative TT</th>
+                        <th onclick="sortTableByColumn(5)">Before/After</th>
+                        <th onclick="sortTableByColumn(6)">Altitude</th>
+                        <th onclick="sortTableByColumn(7)">Azimuth</th>
+                        <th onclick="sortTableByColumn(8)">Alt Name</th>
+                        <th onclick="sortTableByColumn(9)">Type</th>
+                        <th onclick="sortTableByColumn(10)">Magnitude</th>
+                        <th onclick="sortTableByColumn(11)">Info</th>
+                        <th onclick="sortTableByColumn(12)">Catalog</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTableBody">
+                    <!-- Rows will be dynamically appended here -->
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- Chart Modal -->
@@ -659,9 +768,13 @@
         <div class="loading-icon"></div>
         <p>Loading data, please wait...</p>
         <div class="help-text">
+            <!-- Tips -->
             <p class="tip"><strong>Tip:</strong> Double-click to go to Astrobin</p>
             <p class="tip"><strong>Tip:</strong> Right-click to show an altitude graph</p>
-            <p class="note"><strong>Note:</strong> Loading a large catalog (e.g., 10,000 objects) may take 10+ seconds.</p>
+            
+            <!-- Notes -->
+            <p class="note"><strong>Note:</strong> Loading a large catalog (e.g., 10,000 objects) may take 50+ seconds.</p>
+            <p class="note"><strong>Note:</strong> Objects with -ve altitude at the nominated time are not included in the results.</p>
         </div>
     </div>
 </body>
