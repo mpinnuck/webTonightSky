@@ -189,6 +189,7 @@ fieldset label {
 }
 
 /* Responsive Layout Adjustments */
+/*
 @media (max-width: 768px) {
     #resultsContainer {
         max-width: 100%;
@@ -203,6 +204,7 @@ fieldset label {
         width: 100%;
     }
 }
+*/
 
 /* Modal styling */
 .modal {
