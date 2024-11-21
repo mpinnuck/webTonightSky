@@ -100,6 +100,7 @@ button:hover {
 
 #tableContainer {
     flex: 1; /* Allow the container to fill the remaining space */
+    overflow-x: auto; /* Enable horizontal scrolling */
     overflow-y: auto; /* Enable vertical scrolling */
     border: 1px solid #cccccc; /* Optional: Add a border */
     background-color: #ffffff; /* Ensure a white background */
@@ -108,23 +109,24 @@ button:hover {
     max-height: calc(100vh - 300px); /* Adjust based on the height of form and other elements */
     box-sizing: border-box; /* Include border in height calculation */
     width: 100%; /* Adjust the width as needed */
-
+    max-height: calc(100vh - 300px); /* Adjust for other UI elements */
+    padding-bottom: 10px; /* Space to ensure last row visibility */
 }
 /* Table Styling */
 #resultsTable {
     border-collapse: collapse;
     table-layout: auto;
     width: 100%; /* Adjust the width as needed */
-    margin: 0 auto; /* Center the table */
-  
+    max-height: 100%; /* Adjust the value as needed */
+
 }
 
 #resultsTable thead th {
     position: sticky;
     top: 0; /* Stick headers to the top of the container */
     background-color: #f2f2f2; /* Match header background */
-    z-index: 1; /* Keep headers above table rows */
-    border: 1px solid #cccccc;
+    z-index: 2; /* Keep headers above table rows */
+    border: px solid #cccccc;
     text-align: left;
     font-size: 0.9em;
     line-height: 1.2;
@@ -291,7 +293,8 @@ canvas#altitudeChart {
     text-align: center;
     box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.25);
     z-index: 2000;
-    max-width: 320px; /* Adjust width as needed */
+    width: 80%;
+    max-width: 600px; /* Adjust width as needed */
     font-family: Arial, sans-serif;
 }
 
@@ -314,6 +317,14 @@ canvas#altitudeChart {
     100% {
         transform: rotate(360deg);
     }
+}
+
+.altitude-cell {
+    cursor: pointer; /* Show pointer cursor for clickable cells */
+}
+
+.altitude-cell:hover {
+    background-color: #e6f9e6; /* Optional: Highlight on hover */
 }
 
 /* Help Text */

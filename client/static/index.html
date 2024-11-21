@@ -8,9 +8,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.2.1"></script>
     <script>
         // constants
-
-        const APP_SERVER = 'http://127.0.0.1:5000/api/';
-        // const APP_SERVER = 'https://app.microconcepts.com.au/tonightsky/api/';
+        const ENABLE_LOGGING = false;
+    //    const APP_SERVER = 'http://127.0.0.1:5000/api/';
+        const APP_SERVER = 'https://app.microconcepts.com.au/tonightsky/api/';
 
         const HORIZON_ALTITUDE = 25; // Constant for the horizontal line altitude
         // Define constants for gradient start and end colors
@@ -19,35 +19,71 @@
         const GRID_DAY = '#808080';  // Dark gradient color
         const GRID_NIGHT = '#404040';  // Dark gradient color
 
+        const logOutput = document.getElementById('logOutput');
+    ///*
+    function logMessage(message) {
+        if (ENABLE_LOGGING) {
+            console.log(message); // Log to console
+            const logOutput = document.getElementById('logOutput');
+            if (logOutput) {
+                logOutput.style.display = 'block'; // Ensure log div is visible
+                logOutput.textContent += message + '\n';
+                logOutput.scrollTop = logOutput.scrollHeight; // Auto-scroll to the bottom
+            }
+        }
+    }
+
+    function logMessageX(message) {
+        console.log(message); // For debugging in the console
+
+        const logOutput = document.getElementById('logOutput');
+        if (logOutput) {
+            logOutput.style.display = 'block'; // Ensure the log panel is visible
+            logOutput.textContent += message + '\n'; // Append the message
+            logOutput.scrollTop = logOutput.scrollHeight; // Auto-scroll to the bottom
+        }
+    }    //*/
         ////////
         console.log(`Using API server: ${APP_SERVER}`);
+        logMessage(`Using API server x: ${APP_SERVER}`);
+
 
         document.addEventListener('DOMContentLoaded', () => {
             loadSettings(); // Settings are loaded from localStorage
 
             const dateField = document.getElementById('date');
             const timeField = document.getElementById('local_time');
-            
+            const contextMenu = document.getElementById('contextMenu');
+            let longPressTimer;
+
+            // Initialize date field
             if (!dateField.value) {
                 const today = new Date().toISOString().split('T')[0];
                 dateField.value = today;
             }
-            
+
+            // Add event listeners for LST updates and saving settings
             addResizers();
             updateLST();
-            
             dateField.addEventListener('input', updateLST);
             timeField.addEventListener('input', updateLST);
-            // Save settings when inputs change
             document.getElementById('latitude').addEventListener('input', saveSettings);
             document.getElementById('longitude').addEventListener('input', saveSettings);
             document.getElementById('timezone').addEventListener('input', saveSettings);
             document.getElementById('local_time').addEventListener('input', saveSettings);
             document.getElementById('filter_expression').addEventListener('input', saveSettings);
-
             document.querySelectorAll('input[name="catalogs"]').forEach(cb => {
                 cb.addEventListener('change', saveSettings);
             });
+
+            // Close the context menu on click outside
+            document.addEventListener('click', (event) => {
+                if (contextMenu.style.display === 'block' && !contextMenu.contains(event.target)) {
+                    closeContextMenu();
+                }
+            });
+            logMessage("DOM fully loaded");
+            logMessage(`Using API server: ${APP_SERVER}`);
 
         });
 
@@ -137,9 +173,17 @@
         function appendRow(obj) {
             const tableBody = document.getElementById('resultsTableBody');
             const row = document.createElement('tr');
+            /*
             row.innerHTML = `
                 <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td>
                 <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td>${obj.Altitude}</td>
+                <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
+                <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
+            `;
+            */
+            row.innerHTML = `
+                <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td>
+                <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td class="altitude-cell">${obj.Altitude}</td>
                 <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
                 <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
             `;
@@ -156,9 +200,30 @@
                 event.preventDefault();
                 showContextMenu(event.pageX, event.pageY, obj);
             });
+//////////////////
+            // Add click event listener to the "Altitude" cell
+            const altitudeCell = row.querySelector('.altitude-cell');
+            // Shared handler for fetching altitude data
+            const handleAltitudeFetch = () => {
+                fetchAltitudeData(obj);
+            };
 
+            // Add click listener (for desktops and some mobiles)
+            altitudeCell.addEventListener('click', handleAltitudeFetch);
+
+            // Add touchstart listener (for mobile devices as a fallback)
+            altitudeCell.addEventListener('touchstart', (event) => {
+                // Prevent default touch behavior to avoid interference
+                event.preventDefault();
+                fetchAltitudeData(obj);
+            });
+
+//////////////////
             tableBody.appendChild(row);
+            // Dynamically adjust the table size to ensure scrolling works
+
         }
+
 
         function resizeWindowToFitTable() {
             const table = document.getElementById('resultsTable');
@@ -174,79 +239,6 @@
         }
 
 ///////////////////////////////////////////////////
-
-
-        async function listObjectsX() {
-            const latitude = document.getElementById('latitude').value;
-            const longitude = document.getElementById('longitude').value;
-            const date = document.getElementById('date').value;
-            const local_time = document.getElementById('local_time').value;
-            const timezone = document.getElementById('timezone').value;
-            const filter_expression = document.getElementById('filter_expression').value;
-            const catalogs = {};
-            document.querySelectorAll('input[name="catalogs"]').forEach(cb => {
-                catalogs[cb.value] = cb.checked;
-            });
-
-            const progressBar = document.getElementById('progressBar');
-            const progressContainer = document.getElementById('progressContainer');
-            const tableBody = document.getElementById('resultsTableBody');
-
-            tableBody.innerHTML = "";
-
-            try {
-
-                // Show the loading popup
-                const loadingPopup = document.getElementById('loadingPopup');
-                loadingPopup.style.display = 'block';
-                
-                const response = await fetch(`${APP_SERVER}list_objects`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ latitude, longitude, date, local_time, timezone, filter_expression, catalogs })
-                });
-
-                if (!response.ok) throw new Error('Failed to fetch data');
-                
-                const data = await response.json();
-
-                populateTable(data);
-
-            } catch (error) {
-                console.error("Error fetching data:", error);
-                alert("Failed to load objects. Please try again.");
-                progressContainer.style.display = 'none';
-            } finally {
-                // Hide the loading popup
-                loadingPopup.style.display = 'none';
-            }
-        }
-
-        function populateTable(data) {
-            const tableBody = document.getElementById('resultsTableBody');
-            tableBody.innerHTML = "";
-
-            data.forEach(obj => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td>
-                    <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td>${obj.Altitude}</td>
-                    <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
-                    <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
-                `;
-                row.addEventListener('dblclick', () => {
-                    const objectName = obj.Name.replace(/\s+/g, '');
-                    const astrobinUrl = `https://www.astrobin.com/search/?q=${encodeURIComponent(objectName)}`;
-                    window.open(astrobinUrl, '_blank');
-                });
-                row.addEventListener('contextmenu', (event) => {
-                    event.preventDefault();
-                    showContextMenu(event.pageX, event.pageY, obj);
-                });
-                tableBody.appendChild(row);
-            });
-        }
-
 
 
         let sortDirection = 1;
@@ -335,8 +327,9 @@
         }
 
         async function fetchAltitudeData(object) {
+            logMessage("Fetching altitude data");
             try {
-                const response = await fetch('http://127.0.0.1:5000/api/altitude_data', {
+                const response = await fetch(`${APP_SERVER}altitude_data`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -352,9 +345,13 @@
                 if (!response.ok) throw new Error('Failed to fetch altitude data');
 
                 const data = await response.json();
+                logMessage("Have altitude data:");
+
                 showAltitudeGraph(object, data);
+                logMessage("showing altitude data")
             } catch (error) {
                 console.error("Error fetching altitude data:", error);
+                logMessage("Error fetching altitude data:", error);
             }
         }
 
@@ -670,15 +667,11 @@
         }
 
         function closeModal() {
+            logMessage("close altitude data")
+
             document.getElementById('graphModal').style.display = 'none';
         }
 
-        document.addEventListener('click', (e) => {
-            const contextMenu = document.getElementById('contextMenu');
-            if (contextMenu.style.display === 'block' && !contextMenu.contains(e.target)) {
-                closeContextMenu();
-            }
-        });
     </script>
 </head>
 <body>
@@ -722,7 +715,10 @@
                 </button>
             </div>
         </form>
-
+        <!-- Log Output 
+        <div id="logOutput" style="white-space: pre-wrap; font-family: monospace; background: #f0f0f0; padding: 10px; border: 1px solid #ccc; height: 200px; overflow-y: auto;">
+        </div> -->
+    
         <!-- Results Table -->
         <div id="tableContainer">
             <table id="resultsTable">
@@ -748,6 +744,7 @@
                 </tbody>
             </table>
         </div>
+
     </div>
 
     <!-- Chart Modal -->
@@ -770,10 +767,10 @@
         <div class="help-text">
             <!-- Tips -->
             <p class="tip"><strong>Tip:</strong> Double-click to go to Astrobin</p>
-            <p class="tip"><strong>Tip:</strong> Right-click to show an altitude graph</p>
+            <p class="tip"><strong>Tip:</strong> Right-click or click on altitude cell to show an altitude graph</p>
             
             <!-- Notes -->
-            <p class="note"><strong>Note:</strong> Loading a large catalog (e.g., 10,000 objects) may take 50+ seconds.</p>
+            <p class="note"><strong>Note:</strong> Loading a large catalog (e.g., 10,000 objects) may take 60+ seconds.</p>
             <p class="note"><strong>Note:</strong> Objects with -ve altitude at the nominated time are not included in the results.</p>
         </div>
     </div>
