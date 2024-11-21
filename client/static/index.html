@@ -19,30 +19,21 @@
         const GRID_DAY = '#808080';  // Dark gradient color
         const GRID_NIGHT = '#404040';  // Dark gradient color
 
+        ///*
         const logOutput = document.getElementById('logOutput');
-    ///*
-    function logMessage(message) {
-        if (ENABLE_LOGGING) {
-            console.log(message); // Log to console
-            const logOutput = document.getElementById('logOutput');
-            if (logOutput) {
-                logOutput.style.display = 'block'; // Ensure log div is visible
-                logOutput.textContent += message + '\n';
-                logOutput.scrollTop = logOutput.scrollHeight; // Auto-scroll to the bottom
+        function logMessage(message) {
+            if (ENABLE_LOGGING) {
+                console.log(message); // Log to console
+                const logOutput = document.getElementById('logOutput');
+                if (logOutput) {
+                    logOutput.style.display = 'block'; // Ensure log div is visible
+                    logOutput.textContent += message + '\n';
+                    logOutput.scrollTop = logOutput.scrollHeight; // Auto-scroll to the bottom
+                }
             }
         }
-    }
+        //*/
 
-    function logMessageX(message) {
-        console.log(message); // For debugging in the console
-
-        const logOutput = document.getElementById('logOutput');
-        if (logOutput) {
-            logOutput.style.display = 'block'; // Ensure the log panel is visible
-            logOutput.textContent += message + '\n'; // Append the message
-            logOutput.scrollTop = logOutput.scrollHeight; // Auto-scroll to the bottom
-        }
-    }    //*/
         ////////
         console.log(`Using API server: ${APP_SERVER}`);
         logMessage(`Using API server x: ${APP_SERVER}`);
@@ -82,11 +73,109 @@
                     closeContextMenu();
                 }
             });
+
+            // Timezone dropdown logic
+            (() => {
+                const timezoneInput = document.getElementById('timezone'); // Updated ID for the input field
+                const timezoneSelect = document.getElementById('timezoneDropdown'); // Updated ID for the dropdown
+
+                if (!timezoneInput || !timezoneSelect) {
+                    console.error('Timezone input or select element not found!');
+                    return;
+                }
+
+                // Check browser support for Intl.supportedValuesOf
+                let timezones = [];
+                try {
+                    timezones = Intl.supportedValuesOf('timeZone');
+                } catch (error) {
+                    console.warn('Intl.supportedValuesOf is not supported in this browser. Using fallback.');
+                    timezones = [
+                        'UTC', 'Europe/London', 'Europe/Paris', 'America/New_York',
+                        'America/Los_Angeles', 'Australia/Sydney', 'Asia/Tokyo',
+                        // Add more common timezones if needed
+                    ];
+                }
+
+                // Populate the timezone dropdown
+                timezones.forEach(zone => {
+                    const option = document.createElement('option');
+                    option.value = zone;
+                    option.textContent = zone;
+                    timezoneSelect.appendChild(option);
+                });
+
+                // Restore saved timezone from settings
+                const savedTimezone = localStorage.getItem('timezone');
+                if (savedTimezone) {
+                    timezoneInput.value = savedTimezone;
+
+                    // Highlight the restored value in the dropdown if it exists
+                    const matchingOption = Array.from(timezoneSelect.options).find(
+                        option => option.value === savedTimezone
+                    );
+                    if (matchingOption) {
+                        matchingOption.selected = true;
+                    }
+                }
+
+                // Filter dropdown options on input
+                timezoneInput.addEventListener('input', () => {
+                    const filter = timezoneInput.value.toLowerCase();
+                    let hasMatches = false;
+
+                    Array.from(timezoneSelect.options).forEach(option => {
+                        if (option.value.toLowerCase().includes(filter)) {
+                            option.style.display = '';
+                            hasMatches = true;
+                        } else {
+                            option.style.display = 'none';
+                        }
+                    });
+
+                    timezoneSelect.style.display = hasMatches ? 'block' : 'none';
+                });
+
+                // Handle "Enter" key to select the first visible option
+                timezoneInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault(); // Prevent form submission if inside a form
+                        const firstVisibleOption = Array.from(timezoneSelect.options).find(
+                            option => option.style.display !== 'none'
+                        );
+
+                        if (firstVisibleOption) {
+                            timezoneInput.value = firstVisibleOption.value; // Update input with the first visible option
+                            timezoneSelect.style.display = 'none'; // Hide dropdown
+                            saveSettings(); // Save the selected timezone
+                        }
+                    }
+                });
+
+                // Update input value on dropdown selection
+                timezoneSelect.addEventListener('click', (event) => {
+                    const selectedOption = event.target;
+                    if (selectedOption.tagName === 'OPTION') {
+                        timezoneInput.value = selectedOption.value; // Update input with selected option
+                        timezoneSelect.style.display = 'none'; // Hide dropdown
+                        saveSettings(); // Save the selected timezone
+                    }
+                });
+
+                // Close dropdown on blur
+                timezoneInput.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        timezoneSelect.style.display = 'none';
+                    }, 150);
+                });
+            })();
+
             logMessage("DOM fully loaded");
             logMessage(`Using API server: ${APP_SERVER}`);
-
         });
 
+
+        
         async function updateLST() {
             const longitude = document.getElementById('longitude').value;
             const date = document.getElementById('date').value;
@@ -182,7 +271,7 @@
             `;
             */
             row.innerHTML = `
-                <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td>
+                <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td><td>${obj["Direction"]}</td>
                 <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td class="altitude-cell">${obj.Altitude}</td>
                 <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
                 <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
@@ -530,7 +619,7 @@
                         ctx.beginPath();
                         ctx.moveTo(chartArea.left, yHorizon);
                         ctx.lineTo(chartArea.right, yHorizon);
-                        ctx.strokeStyle = 'green';
+                        ctx.strokeStyle = 'blue';
                         ctx.lineWidth = 2; // Thicker line
                         ctx.stroke();
                     }
@@ -580,7 +669,7 @@
                         // Determine the zone for the segment
                         const isDarkZone = i >= duskMinutes && i <= dawnMinutes;
                         const isBelowHorizon = data[i] < HORIZON_ALTITUDE || data[i + 1] < HORIZON_ALTITUDE;
-                        ctx.strokeStyle = isBelowHorizon ? '#c0c0c0' : isDarkZone ? '#ffffff' : '#c0c0c0'; // Adjust colors dynamically
+                        ctx.strokeStyle = isBelowHorizon ? '#c0c0c0' : isDarkZone ? '#00ff00' : '#c0c0c0'; // Adjust colors dynamically
 
                         ctx.beginPath();
                         ctx.moveTo(xStart, yStart);
@@ -681,7 +770,11 @@
             <div class="form-row">
                 <label class="label-input">Latitude: <input type="text" id="latitude" value="-33.713611"></label>
                 <label class="label-input">Longitude: <input type="text" id="longitude" value="151.090278"></label>
-                <label class="label-input">Timezone: <input type="text" id="timezone" value="Australia/Sydney"></label>
+                <label class="label-input">
+                    Timezone:
+                    <input type="text" id="timezone" placeholder="Search timezones..." autocomplete="off" />
+                    <select id="timezoneDropdown" size="5" style="display: none; width: 100%;"></select>
+                </label>
             </div>
             
             <!-- Second Row: Date, Local Time, LST -->
@@ -728,6 +821,7 @@
                         <th onclick="sortTableByColumn(1)">RA</th>
                         <th onclick="sortTableByColumn(2)">Dec</th>
                         <th onclick="sortTableByColumn(3)">Transit Time</th>
+                        <th onclick="sortTableByColumn(3)">Direction</th>
                         <th onclick="sortTableByColumn(4)">Relative TT</th>
                         <th onclick="sortTableByColumn(5)">Before/After</th>
                         <th onclick="sortTableByColumn(6)">Altitude</th>

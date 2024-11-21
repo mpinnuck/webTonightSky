@@ -27,6 +27,7 @@ table_headers = {
     "RA": "RA",
     "Dec": "Dec",
     "Transit Time": "Transit Time",
+    "Direction":"Direction",
     "Relative TT": "Relative TT",
     "Before/After": "Before/After",
     "Altitude": "Altitude",
@@ -161,7 +162,8 @@ def calculate_transit_and_alt_az(ra_deg, dec_deg, latitude, longitude, local_tim
     before_after = "After" if time_diff_hours >= 0 else "Before"
     transit_time_minutes = abs(time_diff_hours * 60)
     local_transit_time = local_time + timedelta(minutes=transit_time_minutes if before_after == "After" else -transit_time_minutes)
-    return transit_time_minutes, local_transit_time.strftime("%H:%M:%S"), before_after, altitude, azimuth
+    direction = "south" if azimuth > 90 and azimuth < 270 else "north"
+    return transit_time_minutes, local_transit_time.strftime("%H:%M:%S"), before_after, altitude, azimuth, direction
 
 def degrees_to_ra(degrees):
     hours = int(degrees // 15)
@@ -290,7 +292,7 @@ def list_objects():
                     dec = float(row['Dec'])
 
                     # Calculate transit time and AltAz
-                    transit_time_minutes, local_transit_time, before_after, altitude, azimuth = calculate_transit_and_alt_az(
+                    transit_time_minutes, local_transit_time, before_after, altitude, azimuth, direction = calculate_transit_and_alt_az(
                         ra, dec, latitude, longitude, local_time)
 
                     if altitude < 0:
@@ -302,6 +304,7 @@ def list_objects():
                         'RA': degrees_to_ra(ra),
                         'Dec': format_dec(dec),
                         'Transit Time': local_transit_time,
+                        'Direction':direction,
                         'Relative TT': format_transit_time(transit_time_minutes),
                         'Before/After': before_after,
                         'Altitude': f"{altitude:.2f}°",
