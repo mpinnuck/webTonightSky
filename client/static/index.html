@@ -545,7 +545,7 @@
             // Set the modal title dynamically
             const titleElement = document.getElementById('chartTitle');
             const maxAltitude = Math.max(...data.altitudes); // Calculate the max altitude
-            titleElement.textContent = `${object.Name.replace(/\s+/g, ' ').trim()} - Transit Time: ${data.transit_time} - Apex: ${maxAltitude.toFixed(1)}°`;
+            titleElement.textContent = `${object.Name.replace(/\s+/g, ' ').trim()} - Transit Time: ${object["Transit Time"]}- Apex: ${maxAltitude.toFixed(1)}°`;
 
             // Display the graph modal
             document.getElementById('graphModal').style.display = 'block';
@@ -574,6 +574,7 @@
 
                 return totalMinutes - firstTimeInMinutes;
             });
+
 
             // Map event times (dawn, dusk, etc.) to minutes from the first time, scaled for 10-minute intervals
             const sunsetMinutes = (parseTimeToMinutes(data.sunset, firstTimeInMinutes) - firstTimeInMinutes) / 10;
