@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TonightSky Help</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a2e;
+            color: #f1f1f1;
+            line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            max-height: 100vh;
+            overflow: auto;
+        }
+
+        header {
+            background-color: #004080; /* Blue header background */
+            color: white;
+            display: flex; /* Use flexbox layout */
+            justify-content: center; /* Center content horizontally */
+            align-items: center; /* Align items vertically */
+            height: 45px; /* Increase the height of the header */
+            padding: 10px;
+            position: relative; /* To position the close button */
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%); /* Center the title */
+        }
+
+        .close-button {
+            position: absolute;
+            right: 10px; /* Align to the right edge */
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .close-button:hover {
+            color: #ff8080;
+        }
+
+        main {
+            padding: 20px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        main h2 {
+            font-size: 1.2rem;
+            color: #8f94fb;
+            margin-bottom: 10px;
+            font-weight: normal;
+        }
+
+        main p {
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        main ul {
+            list-style-type: disc;
+            padding-left: 20px;
+            margin: 0; /* Remove margin from the list itself */
+        }
+
+        main ul li {
+            margin: 0; /* Remove margin between list items */
+            padding: 5px 0; /* Optional: Add padding for better readability */
+            font-size: 0.9rem;
+            line-height: 0.9; /* Adjust line height for compact spacing */
+
+        }
+
+        footer {
+            text-align: center;
+            font-size: 0.8rem;
+            color: #aaa;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>TonightSky Help</h1>
+        <button class="close-button" onclick="window.close()">×</button>
+    </header>
+    <main>
+        <section>
+            <h2>Introduction</h2>
+            <p>Welcome to <strong>TonightSky</strong>, your companion for planning astronomical observations. This guide will help you navigate the app's features and use it effectively.</p>
+        </section>
+        <section>
+            <h2>Settings</h2>
+            <p>Customize your observation parameters using the settings panel:</p>
+            <ul>
+                <li><strong>Latitude & Longitude:</strong> Enter your observation location's coordinates.</li>
+                <li><strong>Timezone:</strong> Search and select your local timezone to ensure accurate calculations.</li>
+                <li><strong>Filters:</strong> Use the catalog filters and query expressions to narrow down your object list.</li>
+            </ul>
+        </section>
+        <section>
+            <h2>Filter Query</h2>
+            <p>The <strong>Filter Query</strong> field allows you to perform SQL-like queries directly on the table data. Use the header names in lowercase, including spaces, to build your query.</p>
+            <p><strong>Example Queries:</strong></p>
+            <ul>
+                <li><code>altitude > 50 and relative tt < 03 and direction = south</code></li>
+                <li><code>magnitude < 5 and type = galaxy</code></li>
+                <li><code>transit time > '21:00' and altitude > 30</code></li>
+                <li><code>catalog = messier and magnitude < 6</code></li>
+                <li><code>before/after > 00:15 and altitude < 20</code></li>
+            </ul>
+            <p>Clicking on a header will sort the corresponding column in ascending or descending order.</p>
+        </section>
+        <section>
+            <h2>Table Interactions</h2>
+            <p>Click on any cell in the <strong>Altitude</strong> column to view the altitude graph for the selected object.</p>
+            <p>The altitude graph displays the altitude of the object over time, with local time shown on the x-axis. The <span style="color: #00ff00;">green portion</span> of the graph highlights the visible period, indicating when the object is above the horizon and visible from your location.</p>
+            <p>In the table, the <strong>Before/After</strong> column shows the relative time of the object's transit, formatted as <code>hh:mm</code>, before or after the nominated time specified in your settings.</p>
+        </section>
+        <section>
+            <h2>Graph Details</h2>
+            <p>The altitude graph provides a detailed visualization of the selected object's position:</p>
+            <ul>
+                <li><strong>Transit Time:</strong> The moment the object is at its highest altitude.</li>
+                <li><strong>Visible Period:</strong> Highlighted in green, showing when the object is above the horizon.</li>
+                <li><strong>X-axis:</strong> Local time, making it easy to plan your observations.</li>
+            </ul>
+        </section>
+        <section>
+            <h2>Tips & Notes</h2>
+            <ul>
+                <li>Press eneter after altering settings will rerun the query.</li>
+                <li>Double-click a row in the table to search for the object on Astrobin.</li>
+                <li>Use the "Filter Query" field to refine your search results (e.g., <code>altitude > 30 and magnitude < 6</code>).</li>
+                <li>The "Object Count" label updates dynamically as objects are loaded into the table.</li>
+            </ul>
+        </section>
+    </main>
+</body>
+</html>

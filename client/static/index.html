@@ -168,7 +168,78 @@
                         timezoneSelect.style.display = 'none';
                     }, 150);
                 });
+
+
             })();
+
+
+            const helpButton = document.getElementById('helpButton');
+            helpButton.addEventListener('click', (event) => {
+                event.preventDefault(); // Prevent default behavior
+
+                // Define max dimensions
+                const maxWidth = 900;  // Maximum width of the popup
+                const maxHeight = 1200; // Maximum height of the popup
+
+                // Set initial dimensions
+                const width = Math.min(window.innerWidth * 0.9, maxWidth);
+                const height = Math.min(window.innerHeight * 0.9, maxHeight);
+
+                // Calculate center position
+                const screenLeft = window.screenLeft || window.screenX;
+                const screenTop = window.screenTop || window.screenY;
+                const screenWidth = window.innerWidth || document.documentElement.clientWidth;
+                const screenHeight = window.innerHeight || document.documentElement.clientHeight;
+
+                const left = screenLeft + (screenWidth - width) / 2;
+                const top = screenTop + (screenHeight - height) / 2;
+
+                // Open the popup
+                const helpWindow = window.open(
+                    'help.html',
+                    '_blank',
+                    `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`
+                );
+
+                if (!helpWindow) {
+                    alert('Popup blocked! Please allow popups for this website.');
+                    return;
+                }
+
+                // Wait for the popup to load and resize it
+                const adjustWindow = () => {
+                    try {
+                        const helpDocument = helpWindow.document;
+
+                        // Ensure the content is loaded
+                        if (!helpDocument.body || helpDocument.body.scrollHeight === 0) {
+                            setTimeout(adjustWindow, 50); // Retry after a short delay
+                            return;
+                        }
+
+                        const contentHeight = helpDocument.body.scrollHeight;
+                        const contentWidth = helpDocument.body.scrollWidth;
+
+                        // Resize the popup to fit content within max dimensions
+                        const newWidth = Math.min(contentWidth + 30, maxWidth); // Add some padding
+                        const newHeight = Math.min(contentHeight + 30, maxHeight); // Add some padding
+
+                        helpWindow.resizeTo(newWidth, newHeight);
+
+                        // Re-center the window
+                        const newLeft = screenLeft + (screenWidth - newWidth) / 2;
+                        const newTop = screenTop + (screenHeight - newHeight) / 2;
+                        helpWindow.moveTo(newLeft, newTop);
+                    } catch (error) {
+                        console.error('Error adjusting help window:', error);
+                    }
+                };
+
+                helpWindow.onload = adjustWindow;
+
+                // Fallback in case `onload` doesn't trigger correctly
+                setTimeout(adjustWindow, 500);
+            });
 
             logMessage("DOM fully loaded");
             logMessage(`Using API server: ${APP_SERVER}`);
@@ -199,7 +270,12 @@
                 console.error("Error fetching LST:", error);
             }
         }
-
+////////////////////////////////
+        function updateObjectCount() {
+            const tableBody = document.getElementById('resultsTableBody');
+            const rowCount = tableBody.querySelectorAll('tr').length;
+            document.getElementById('objectCount').textContent = `Object Count: ${rowCount}`;
+        }
 /////////////////////////////////////////////////////
         async function listObjects() {
             const latitude = document.getElementById('latitude').value;
@@ -231,6 +307,7 @@
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder("utf-8");
                 let accumulatedData = "";
+                let rowCount = 0; // Track the number of rows added
 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -245,12 +322,20 @@
                             try {
                                 const obj = JSON.parse(line);
                                 appendRow(obj); // Append each row to the table
+                                rowCount++; // Increment row count
+                                // Update object count every 100 items
+                                if (rowCount % 100 === 0) {
+                                    objectCount.textContent = `Object Count: ${rowCount}`;
+                                }
                             } catch (e) {
                                 console.error("Error parsing streamed line:", e);
                             }
                         }
                     }
                 }
+                // Final count update
+                objectCount.textContent = `Object Count: ${rowCount}`;
+
             } catch (error) {
                 console.error("Error fetching data:", error);
                 alert("Failed to load objects. Please try again.");
@@ -775,6 +860,8 @@
                     <input type="text" id="timezone" placeholder="Search timezones..." autocomplete="off" />
                     <select id="timezoneDropdown" size="5" style="display: none; width: 100%;"></select>
                 </label>
+                <!-- Add the Help Button -->
+                <button id="helpButton" title="Help">?</button>
             </div>
             
             <!-- Second Row: Date, Local Time, LST -->
@@ -803,9 +890,8 @@
                 
             <!-- Button Row -->
             <div class="button-row">
-                <button type="submit">
-                    List Objects
-                </button>
+                <button type="submit" id="listObjectsButton">List Objects</button>
+                <span id="objectCount" class="object-count-label">Object Count: 0</span>
             </div>
         </form>
         <!-- Log Output 

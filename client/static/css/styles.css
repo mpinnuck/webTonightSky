@@ -80,7 +80,16 @@ input[type="text"], input[type="date"], input[type="time"], .wide-input {
 /* Button Styling */
 .button-row {
     display: flex;
-    justify-content: flex-start;
+    align-items: center; /* Align button and label vertically */
+    justify-content: flex-start; /* Align items to the left */
+    gap: 10px; /* Add spacing between the button and label */
+    margin-bottom: 10px; /* Add space below the row */
+}
+
+.object-count-label {
+    font-size: 14px;
+    font-weight: normal;
+    color: #333; /* Adjust color if needed */
 }
 
 button {
@@ -88,7 +97,7 @@ button {
     color: white;
     padding: 8px 16px;
     font-size: 14px;
-    font-weight: bold;
+    font-weight: normal;
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -213,9 +222,9 @@ fieldset label {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: auto;
-    max-height: 90vh;
-    max-width: 700px;
+    width: 75vw;
+    max-height: 700px;
+    max-width: 1400px;
     height: auto;
     background-color: white;
     box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.3);
@@ -359,4 +368,27 @@ canvas#altitudeChart {
     content: '⏳'; /* Hourglass icon */
     margin-right: 8px;
     color: #FF9800; /* Orange for the note */
+}
+
+#helpButton {
+    position: absolute;
+    top: 5px; /* Adjust for alignment in the titlebar */
+    right: 10px; /* Adjust for placement in the titlebar */
+    background-color: #007BFF; /* Button color */
+    color: white; /* Text color */
+    border: none;
+    border-radius: 50%; /* Makes it a perfect circle */
+    width: 30px; /* Diameter of the circle */
+    height: 30px; /* Diameter of the circle */
+    font-size: 16px; /* Adjust for the size of the ? */
+    font-weight: bold;
+    cursor: pointer;
+    display: flex; /* Use flexbox for centering */
+    justify-content: center; /* Horizontal centering */
+    align-items: center; /* Vertical centering */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); /* Optional: Adds a subtle shadow */
+}
+
+#helpButton:hover {
+    background-color: #0056b3; /* Darker blue on hover */
 }
