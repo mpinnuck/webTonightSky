@@ -80,4 +80,4 @@ TonightSky helps users calculate Local Sidereal Time (LST), list astronomical ob
 ## **Installation**
 1. Clone the repository:
    ```bash
-   git clone https://github.com/username/tonightsky.git
+   git clone https://github.com/mpinnuck/webTonightSky.git
