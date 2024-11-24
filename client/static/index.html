@@ -35,8 +35,7 @@
         //*/
 
         ////////
-        console.log(`Using API server: ${APP_SERVER}`);
-        logMessage(`Using API server x: ${APP_SERVER}`);
+        logMessage(`Using API server: ${APP_SERVER}`);
 
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -172,6 +171,13 @@
 
             })();
 
+            // Global keydown listener for the Enter key
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault(); // Prevent default behavior (e.g., form submission or undesired actions)
+                    listObjects(); // Always run the listObjects() function
+                }
+            });
 
             const helpButton = document.getElementById('helpButton');
             helpButton.addEventListener('click', (event) => {
@@ -347,14 +353,7 @@
         function appendRow(obj) {
             const tableBody = document.getElementById('resultsTableBody');
             const row = document.createElement('tr');
-            /*
-            row.innerHTML = `
-                <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td>
-                <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td>${obj.Altitude}</td>
-                <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
-                <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
-            `;
-            */
+
             row.innerHTML = `
                 <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td><td>${obj["Direction"]}</td>
                 <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td class="altitude-cell">${obj.Altitude}</td>
@@ -391,8 +390,19 @@
                 event.preventDefault();
                 fetchAltitudeData(obj);
             });
+    
+            row.addEventListener('click', () => {
+                // Remove highlight from any previously highlighted row
+                const previouslyHighlightedRow = document.querySelector('.highlighted-row');
+                if (previouslyHighlightedRow) {
+                    previouslyHighlightedRow.classList.remove('highlighted-row');
+                }
+                // Highlight the clicked row
+                row.classList.add('highlighted-row');
+            });
+            
+            //////////////////
 
-//////////////////
             tableBody.appendChild(row);
             // Dynamically adjust the table size to ensure scrolling works
 
