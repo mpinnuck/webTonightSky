@@ -108,14 +108,6 @@ def log_request_info():
         f"    Data: \n{formatted_data}"
     )
 
-@app.route('/')
-def home():
-    return "TonightSky app is running!", 200
-
-@app.route('/api/version', methods=['GET'])
-def get_version():
-    return jsonify({"version": VERSION})
-
 def load_catalog():
     global catalog_table
     try:
@@ -129,6 +121,13 @@ def load_catalog():
 with app.app_context():
     load_catalog()  # Call your initialization code here
 
+@app.route('/')
+def home():
+    return "TonightSky app is running!", 200
+
+@app.route('/api/version', methods=['GET'])
+def get_version():
+    return jsonify({"version": VERSION})
 
 # Utility function to convert RA from HH:MM:SS to decimal degrees
 def ra_to_degrees(ra_str):
