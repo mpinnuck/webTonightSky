@@ -75,15 +75,18 @@
 
             // Timezone dropdown logic
             (() => {
-                const timezoneInput = document.getElementById('timezone'); // Updated ID for the input field
-                const timezoneSelect = document.getElementById('timezoneDropdown'); // Updated ID for the dropdown
+                const timezoneInput = document.getElementById('timezone');
+                const timezoneSelect = document.getElementById('timezoneDropdown');
 
                 if (!timezoneInput || !timezoneSelect) {
-                    console.error('Timezone input or select element not found!');
+                    console.error('Timezone input or dropdown not found!');
                     return;
                 }
+                // Detect if the user is on a mobile touch device
+                const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+                let isDropdownFocused = false; // Flag to detect focus on dropdown
 
-                // Check browser support for Intl.supportedValuesOf
+                // Populate the timezone dropdown
                 let timezones = [];
                 try {
                     timezones = Intl.supportedValuesOf('timeZone');
@@ -92,11 +95,9 @@
                     timezones = [
                         'UTC', 'Europe/London', 'Europe/Paris', 'America/New_York',
                         'America/Los_Angeles', 'Australia/Sydney', 'Asia/Tokyo',
-                        // Add more common timezones if needed
                     ];
                 }
 
-                // Populate the timezone dropdown
                 timezones.forEach(zone => {
                     const option = document.createElement('option');
                     option.value = zone;
@@ -109,16 +110,13 @@
                 if (savedTimezone) {
                     timezoneInput.value = savedTimezone;
 
-                    // Highlight the restored value in the dropdown if it exists
                     const matchingOption = Array.from(timezoneSelect.options).find(
                         option => option.value === savedTimezone
                     );
-                    if (matchingOption) {
-                        matchingOption.selected = true;
-                    }
+                    if (matchingOption) matchingOption.selected = true;
                 }
 
-                // Filter dropdown options on input
+                // Filter dropdown options based on input
                 timezoneInput.addEventListener('input', () => {
                     const filter = timezoneInput.value.toLowerCase();
                     let hasMatches = false;
@@ -135,41 +133,68 @@
                     timezoneSelect.style.display = hasMatches ? 'block' : 'none';
                 });
 
-                // Handle "Enter" key to select the first visible option
-                timezoneInput.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter') {
-                        event.preventDefault(); // Prevent form submission if inside a form
-                        const firstVisibleOption = Array.from(timezoneSelect.options).find(
-                            option => option.style.display !== 'none'
-                        );
+                // Show dropdown on focus
+                timezoneInput.addEventListener('focus', () => {
+                    const rect = timezoneInput.getBoundingClientRect();
 
-                        if (firstVisibleOption) {
-                            timezoneInput.value = firstVisibleOption.value; // Update input with the first visible option
-                            timezoneSelect.style.display = 'none'; // Hide dropdown
-                            saveSettings(); // Save the selected timezone
-                        }
+                    timezoneSelect.style.display = 'block'; // Show dropdown
+                        // Find the option matching the current input value
+                    const currentValue = timezoneInput.value.toLowerCase();
+                    const matchingOption = Array.from(timezoneSelect.options).find(
+                        (option) => option.value.toLowerCase() === currentValue
+                    );
+
+                    // If a matching option exists, focus it
+                    if (matchingOption) {
+                        timezoneSelect.value = matchingOption.value; // Select the option
                     }
+
                 });
 
-                // Update input value on dropdown selection
+                // Update dropdown focus state when interacting with it
+                timezoneSelect.addEventListener('mousedown', () => {
+                    isDropdownFocused = true;
+                });
+                timezoneSelect.addEventListener('mouseup', () => {
+                    isDropdownFocused = false;
+                });
+
+                // Handle dropdown click selection
                 timezoneSelect.addEventListener('click', (event) => {
                     const selectedOption = event.target;
                     if (selectedOption.tagName === 'OPTION') {
-                        timezoneInput.value = selectedOption.value; // Update input with selected option
-                        timezoneSelect.style.display = 'none'; // Hide dropdown
-                        saveSettings(); // Save the selected timezone
+                        timezoneInput.value = selectedOption.value;
+                        timezoneSelect.style.display = 'none';
+                        saveSettings(); // Optional: Save the selection
                     }
                 });
-
-                // Close dropdown on blur
-                timezoneInput.addEventListener('blur', () => {
-                    setTimeout(() => {
-                        timezoneSelect.style.display = 'none';
-                    }, 150);
-                });
-
-
+                // Add touchstart event for touch devices
+                if (isMobile) {
+                    timezoneSelect.addEventListener('touchstart', (event) => {
+                        const selectedOption = event.target;
+                        if (selectedOption.tagName === 'OPTION') {
+                            timezoneInput.value = selectedOption.value;
+                            timezoneSelect.style.display = 'none';
+                            saveSettings(); // Optional: Save the selection
+                        }
+                    });
+                    timezoneSelect.addEventListener('change', (event) => {
+                        timezoneInput.value = event.target.value; // Update the input with the selected value
+                        timezoneSelect.style.display = 'none'; // Hide the dropdown
+                        saveSettings(); // Save the updated value
+                    });
+                } else {
+                    // Close dropdown only if neither input nor dropdown are focused
+                     timezoneInput.addEventListener('blur', () => {
+                        setTimeout(() => {
+                            if (!isDropdownFocused) {
+                                timezoneSelect.style.display = 'none';
+                            }
+                        }, 150);
+                    });
+                }
             })();
+
 
             // Global keydown listener for the Enter key
             document.addEventListener('keydown', (event) => {
@@ -861,18 +886,22 @@
 </head>
 <body>
     <div id="resultsContainer">
-        <h1>TonightSky v1.0</h1>
+        <header id="appHeader">
+            <h1>TonightSky</h1>
+            <div class="header-right">
+                <span id="version">v2.1</span>
+                <button id="helpButton" title="Help">?</button>
+            </div>
+        </header>
         <form onsubmit="event.preventDefault(); listObjects();" id="topForm">
             <div class="form-row">
                 <label class="label-input">Latitude: <input type="text" id="latitude" value="-33.713611"></label>
                 <label class="label-input">Longitude: <input type="text" id="longitude" value="151.090278"></label>
-                <label class="label-input">
+                <label class="dropdown-input">
                     Timezone:
                     <input type="text" id="timezone" placeholder="Search timezones..." autocomplete="off" />
                     <select id="timezoneDropdown" size="5" style="display: none; width: 100%;"></select>
                 </label>
-                <!-- Add the Help Button -->
-                <button id="helpButton" title="Help">?</button>
             </div>
             
             <!-- Second Row: Date, Local Time, LST -->
@@ -918,16 +947,16 @@
                         <th onclick="sortTableByColumn(1)">RA</th>
                         <th onclick="sortTableByColumn(2)">Dec</th>
                         <th onclick="sortTableByColumn(3)">Transit Time</th>
-                        <th onclick="sortTableByColumn(3)">Direction</th>
-                        <th onclick="sortTableByColumn(4)">Relative TT</th>
-                        <th onclick="sortTableByColumn(5)">Before/After</th>
-                        <th onclick="sortTableByColumn(6)">Altitude</th>
-                        <th onclick="sortTableByColumn(7)">Azimuth</th>
-                        <th onclick="sortTableByColumn(8)">Alt Name</th>
-                        <th onclick="sortTableByColumn(9)">Type</th>
-                        <th onclick="sortTableByColumn(10)">Magnitude</th>
-                        <th onclick="sortTableByColumn(11)">Info</th>
-                        <th onclick="sortTableByColumn(12)">Catalog</th>
+                        <th onclick="sortTableByColumn(4)">Direction</th>
+                        <th onclick="sortTableByColumn(5)">Relative TT</th>
+                        <th onclick="sortTableByColumn(6)">Before/After</th>
+                        <th onclick="sortTableByColumn(7)">Altitude</th>
+                        <th onclick="sortTableByColumn(8)">Azimuth</th>
+                        <th onclick="sortTableByColumn(9)">Alt Name</th>
+                        <th onclick="sortTableByColumn(10)">Type</th>
+                        <th onclick="sortTableByColumn(11)">Magnitude</th>
+                        <th onclick="sortTableByColumn(12)">Info</th>
+                        <th onclick="sortTableByColumn(13)">Catalog</th>
                     </tr>
                 </thead>
                 <tbody id="resultsTableBody">
