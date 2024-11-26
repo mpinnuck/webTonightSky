@@ -1,6 +1,8 @@
+import flask
 from flask import Flask, jsonify, request
 from flask import Response, stream_with_context
 from flask_cors import CORS
+from flask import Response, stream_with_context
 from datetime import datetime, timedelta
 import pytz
 import re
@@ -8,30 +10,47 @@ from astropy.coordinates import EarthLocation, AltAz, SkyCoord, get_sun
 from astropy.time import Time
 import astropy.units as u
 from astropy.table import Table
-import logging
 from astroplan import Observer, FixedTarget
 import json
 import time
 import os
+import logging
+from logging.handlers import RotatingFileHandler  # Ensure this is imported
+import pyparsing as pp
+from pyparsing import Word, alphas, alphanums, oneOf, quotedString, removeQuotes, infixNotation, opAssoc, Group, ParseException
+
+
 ###########################################################
 #   GLOBALS
 #
+# Constants
+VERSION = "1.1"
+
+#############################
 # Set up logging
 # Ensure the log directory exists
 log_directory = "./logs"
-os.makedirs(log_directory, exist_ok=True)  # Create the directory if it doesn't exist
+os.makedirs(log_directory, exist_ok=True)
 
-# Configure logging
+# Configure Rotating File Handler
 log_file = os.path.join(log_directory, "tonightsky.log")
-logging.basicConfig(
-    filename=log_file,              # Log file path
-    level=logging.DEBUG,            # Log level
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # Log format
+rotating_handler = RotatingFileHandler(
+    log_file,       # Log file path
+    maxBytes=5 * 1024 * 1024,  # Maximum size of each log file (5MB in this case)
+    backupCount=1   # Keep 1 old log file
 )
+
+# Set formatter for the rotating handler
+rotating_handler.setFormatter(logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+))
 
 # Create the logger
 logger = logging.getLogger("TonightSky")
-logger.info("Logging initialized successfully.")
+logger.setLevel(logging.DEBUG)  # Set the logging level
+logger.addHandler(rotating_handler)
+
+logger.info("Logging initialized with file rotation.")
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -58,15 +77,44 @@ table_headers = {
     "Catalog": "Catalog"
 }
 ########## end GLOBALS ##################
-import flask
-print("Flask version:", flask.__version__)
-print("Type of app:", type(app))
-print("Available attributes in app:", dir(app))
+logger.info(f"TonightSky version: {VERSION}")
+logger.info(f"Flask version: {flask.__version__}")
+logger.info(f"Type of app: {type(app)}")
+logger.info(f"App configuration: {app.config}")
 
+@app.before_request
+def log_request_info():
+    """
+    Log details about each incoming request, including IP, endpoint, and query parameters.
+    """
+    client_ip = request.remote_addr or "Unknown IP"
+    method = request.method
+    endpoint = request.endpoint or "Unknown Endpoint"
+    url = request.url
+    headers = dict(request.headers)
+    data = request.json if request.is_json else request.form.to_dict()
+
+    # Format the headers and data for better readability
+    formatted_headers = json.dumps(headers, indent=4)
+    formatted_data = json.dumps(data, indent=4)
+
+    logger.info(
+        f"\nAccess Log:\n"
+        f"    IP: {client_ip}\n"
+        f"    Method: {method}\n"
+        f"    Endpoint: {endpoint}\n"
+        f"    URL: {url}\n"
+        f"    Headers: \n{formatted_headers}\n"
+        f"    Data: \n{formatted_data}"
+    )
 
 @app.route('/')
 def home():
     return "TonightSky app is running!", 200
+
+@app.route('/api/version', methods=['GET'])
+def get_version():
+    return jsonify({"version": VERSION})
 
 def load_catalog():
     global catalog_table
@@ -231,7 +279,7 @@ def parse_query_conditions(query, valid_columns):
         else:
             raise ValueError(f"Invalid column: {column}")
     return conditions
-
+        
 def evaluate_conditions(row, conditions):
     if not conditions:
         return True
@@ -264,8 +312,6 @@ def evaluate_conditions(row, conditions):
         elif operator == 'like' and isinstance(row_value, str) and value not in row_value:
             return False
     return True
-
-from flask import Response, stream_with_context
 
 @app.route('/api/list_objects', methods=['POST'])
 def list_objects():
@@ -377,7 +423,7 @@ def list_objects():
 
    
 if __name__ == "__main__":
-
+    logger.info(f"main() TonightSky version: {VERSION}")
     # Determine the Flask environment
     flask_env = os.environ.get("FLASK_ENV", "production").lower()  # Default to 'production'
 
