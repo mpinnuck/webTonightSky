@@ -37,7 +37,10 @@
         ////////
         logMessage(`Using API server: ${APP_SERVER}`);
 
-
+        /////////////////////////////////////////////////////////////////////////////////
+        //
+        //  Setup app events that except for events related to list items
+        //
         document.addEventListener('DOMContentLoaded', () => {
             loadSettings(); // Settings are loaded from localStorage
 
@@ -151,13 +154,6 @@
 
                 });
 
-                // Update dropdown focus state when interacting with it
-                timezoneSelect.addEventListener('mousedown', () => {
-                    isDropdownFocused = true;
-                });
-                timezoneSelect.addEventListener('mouseup', () => {
-                    isDropdownFocused = false;
-                });
 
                 // Handle dropdown click selection
                 timezoneSelect.addEventListener('click', (event) => {
@@ -178,12 +174,26 @@
                             saveSettings(); // Optional: Save the selection
                         }
                     });
+
                     timezoneSelect.addEventListener('change', (event) => {
                         timezoneInput.value = event.target.value; // Update the input with the selected value
                         timezoneSelect.style.display = 'none'; // Hide the dropdown
                         saveSettings(); // Save the updated value
                     });
+
+                    timezoneSelect.addEventListener('focusout', (event) => {
+                        timezoneSelect.style.display = 'none'; // Hide the dropdown
+                    });
                 } else {
+
+                    // Update dropdown focus state when interacting with it
+                    timezoneSelect.addEventListener('mousedown', () => {
+                        isDropdownFocused = true;
+                    });
+                    timezoneSelect.addEventListener('mouseup', () => {
+                        isDropdownFocused = false;
+                    });
+
                     // Close dropdown only if neither input nor dropdown are focused
                      timezoneInput.addEventListener('blur', () => {
                         setTimeout(() => {
@@ -301,13 +311,13 @@
                 console.error("Error fetching LST:", error);
             }
         }
-////////////////////////////////
+
         function updateObjectCount() {
             const tableBody = document.getElementById('resultsTableBody');
             const rowCount = tableBody.querySelectorAll('tr').length;
             document.getElementById('objectCount').textContent = `Object Count: ${rowCount}`;
         }
-/////////////////////////////////////////////////////
+
         async function listObjects() {
             const latitude = document.getElementById('latitude').value;
             const longitude = document.getElementById('longitude').value;
@@ -398,7 +408,7 @@
                 event.preventDefault();
                 showContextMenu(event.pageX, event.pageY, obj);
             });
-//////////////////
+
             // Add click event listener to the "Altitude" cell
             const altitudeCell = row.querySelector('.altitude-cell');
             // Shared handler for fetching altitude data
@@ -417,20 +427,23 @@
             });
     
             row.addEventListener('click', () => {
-                // Remove highlight from any previously highlighted row
-                const previouslyHighlightedRow = document.querySelector('.highlighted-row');
-                if (previouslyHighlightedRow) {
-                    previouslyHighlightedRow.classList.remove('highlighted-row');
+                // Check if the row is already highlighted
+                if (row.classList.contains('highlighted-row')) {
+                    // If highlighted, remove the highlight
+                    row.classList.remove('highlighted-row');
+                } else {
+                    // Remove highlight from any previously highlighted row
+                    const previouslyHighlightedRow = document.querySelector('.highlighted-row');
+                    if (previouslyHighlightedRow) {
+                        previouslyHighlightedRow.classList.remove('highlighted-row');
+                    }
+                    // Highlight the clicked row
+                    row.classList.add('highlighted-row');
                 }
-                // Highlight the clicked row
-                row.classList.add('highlighted-row');
             });
-            
-            //////////////////
 
             tableBody.appendChild(row);
-            // Dynamically adjust the table size to ensure scrolling works
-
+ 
         }
 
 
@@ -446,8 +459,6 @@
             // Trigger a window resize event to force the browser to recalculate layout
             window.dispatchEvent(new Event('resize'));
         }
-
-///////////////////////////////////////////////////
 
 
         let sortDirection = 1;
@@ -889,7 +900,7 @@
         <header id="appHeader">
             <h1>TonightSky</h1>
             <div class="header-right">
-                <span id="version">v2.1</span>
+                <span id="version">v2.2</span>
                 <button id="helpButton" title="Help">?</button>
             </div>
         </header>
