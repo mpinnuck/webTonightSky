@@ -115,6 +115,11 @@
         <section>
             <h2>Filter Query</h2>
             <p>The <strong>Filter Query</strong> field allows you to perform SQL-like queries directly on the table data. Use the header names in lowercase, including spaces, to build your query.</p>
+            <p><strong>Logical Operators:</strong></p>  
+            <ul>
+                <li><code>and</code> = <code>and</code>, <code>*</code>, <code>&amp;</code></li>
+                <li><code>or</code> = <code>or</code>, <code>|</code>, <code>+</code></li>
+            </ul>
             <p><strong>Example Queries:</strong></p>
             <ul>
                 <li><code>altitude > 50 and relative tt < 03 and direction = south</code></li>
@@ -122,6 +127,8 @@
                 <li><code>transit time > '21:00' and altitude > 30</code></li>
                 <li><code>catalog = messier and magnitude < 6</code></li>
                 <li><code>before/after = before and altitude < 20</code></li>
+                <li><code>altitude > 55 &amp; type like galaxy &amp; relative tt < 00:30 &amp; magnitude < 11 and magnitude != ""</code></li>
+                <li><code>(type = Globular Cluster or type = Planetary Nebula) and magnitude &lt; 8</code></li> 
             </ul>
             <p>Clicking on a header will sort the corresponding column in ascending or descending order.</p>
         </section>

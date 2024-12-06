@@ -17,14 +17,27 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler  # Ensure this is imported
 import pyparsing as pp
-from pyparsing import Word, alphas, alphanums, oneOf, quotedString, removeQuotes, infixNotation, opAssoc, Group, ParseException
+from pyparsing import ParseException
+from pyparsing import (
+    Word,
+    alphas,
+    alphanums,
+    oneOf,
+    quotedString,
+    removeQuotes,
+    infixNotation,
+    opAssoc,
+    Group,
+    ParseException,
+    CaselessKeyword,
+)
 
 
 ###########################################################
 #   GLOBALS
 #
 # Constants
-VERSION = "1.1"
+VERSION = "2.0"
 
 #############################
 # Set up logging
@@ -59,23 +72,27 @@ csv_filename = './data/celestial_catalog.csv'
 catalog_table = None  # Global in-memory Astropy Table
 
 
-# Define a mapping from CSV headers to table headers
+# Define a mapping from CSV headers to table headers with formatting info
 table_headers = {
-    "Name": "Name",
-    "RA": "RA",
-    "Dec": "Dec",
-    "Transit Time": "Transit Time",
-    "Direction":"Direction",
-    "Relative TT": "Relative TT",
-    "Before/After": "Before/After",
-    "Altitude": "Altitude",
-    "Azimuth": "Azimuth",
-    "Alt Name": "Alt Name",
-    "Type": "Type",
-    "Magnitude": "Magnitude",
-    "Info": "Info",
-    "Catalog": "Catalog"
+    "Name": {"name": "Name", "type": "string"},
+    "RA": {"name": "RA", "type": "time"},
+    "Dec": {"name": "Dec", "type": "string"},  
+    "Transit Time": {"name": "Transit Time", "type": "time"},
+    "Direction": {"name": "Direction", "type": "string"},
+    "Relative TT": {"name": "Relative TT", "type": "time"},
+    "Before/After": {"name": "Before/After", "type": "string"},
+    "Altitude": {"name": "Altitude", "type": "float"},
+    "Azimuth": {"name": "Azimuth", "type": "float"},
+    "Alt Name": {"name": "Alt Name", "type": "string"},
+    "Type": {"name": "Type", "type": "string"},
+    "Magnitude": {"name": "Magnitude", "type": "float"},
+    "Info": {"name": "Info", "type": "string"},
+    "Catalog": {"name": "Catalog", "type": "string"}
 }
+
+# Create valid_columns from table_headers
+valid_columns = {header.lower(): info for header, info in table_headers.items()}
+
 ########## end GLOBALS ##################
 logger.info(f"TonightSky version: {VERSION}")
 logger.info(f"Flask version: {flask.__version__}")
@@ -268,49 +285,180 @@ def format_transit_time(transit_time_minutes):
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 def parse_query_conditions(query, valid_columns):
-    pattern = r"([a-zA-Z_][\w\s]*)\s*(>|>=|<|<=|=|!=|like)\s*('[^']*'|\"[^\"]*\"|[\w\.]+)\s*(AND|OR|\+|\|)?"
-    conditions = []
-    for match in re.finditer(pattern, query, re.IGNORECASE):
-        column, operator, value, logic_op = match.groups()
-        column = column.lower().strip()
-        if column in valid_columns:
-            conditions.append((valid_columns[column], operator, value.strip("'\""), logic_op))
+    """
+    Parse the query string into a list of conditions.
+    """
+    # Define the grammar for the query language
+    column_name = pp.oneOf(list(valid_columns.keys()), caseless=True)
+    operator = oneOf("> >= < <= = != like", caseless=True)
+
+    # Define a value parser for time-like columns
+    time_value = Word(alphanums + ":")
+
+    # Define a condition with the time_value parser for specific columns
+    time_condition = Group(
+        pp.oneOf([k.lower() for k in table_headers if table_headers[k]['type'] == 'time'], caseless=True) +
+        operator + 
+        time_value
+    )
+
+    value = (
+        quotedString.setParseAction(removeQuotes) | 
+        Word(alphanums + ".°") | 
+        Word(alphas)
+    )
+
+    # Regular condition for other columns
+    condition = Group(column_name + operator + value)
+
+    # Define the structure for AND and OR expressions (using symbols)
+    and_ = CaselessKeyword("and") | "*" | "&"
+    or_ = CaselessKeyword("or") | "|" | "+"
+
+    # Handle nested expressions and single conditions
+    expr = infixNotation(
+        time_condition | condition,  # Include time_condition in infixNotation
+        [
+            (and_, 2, opAssoc.LEFT),
+            (or_, 2, opAssoc.LEFT),
+        ],
+    )
+
+    try:
+        # Parse the query string
+        result = expr.parseString(query)
+
+        # Check if the result is a single condition (not nested)
+        if len(result) == 3 and isinstance(result[0], str) and isinstance(result[1], str) and isinstance(result[2], str):
+            parsed_query = [pp.ParseResults(result)]  # Wrap it in a list after converting to pp.ParseResults
         else:
-            raise ValueError(f"Invalid column: {column}")
-    return conditions
-        
+            parsed_query = result  # No need to access [0] here
+
+        # --- Flatten the parsed query ---
+        def flatten_parsed_query(parsed_expr):
+            flattened = []
+            for item in parsed_expr:
+                if isinstance(item, pp.ParseResults) and isinstance(item[0], pp.ParseResults):
+                    flattened.extend(flatten_parsed_query(item))
+                else:
+                    flattened.append(item)
+            return flattened
+
+        parsed_query = flatten_parsed_query(parsed_query)
+
+    except ParseException as e:
+        raise ValueError(f"Invalid query syntax: {e}")
+
+    def extract_conditions(parsed_expr):
+        """
+        Recursively extract conditions from the parsed expression.
+        """
+        conditions = []
+        for item in parsed_expr:
+            if isinstance(item, pp.ParseResults) and len(item) == 3:
+                column, operator, value = item
+
+                # Get column information from valid_columns
+                column_info = valid_columns.get(column.lower())
+                if not column_info:
+                    raise ValueError(f"Invalid column: {column}")
+                column_name = column_info["name"]
+                column_type = column_info["type"]
+
+                # Normalize time values
+                # Normalize time values
+                if column_type == "time":
+                    if ":" not in value:  # Add hh:mm:ss if no colon is present
+                        value += ":00:00"
+                    elif value.count(":") == 1:  # Add :ss if only one colon is present
+                        value += ":00" 
+                                # Convert to float if it's a float column
+                try:
+                    if column_type == "float":
+                        value = float(value)
+                except ValueError:
+                    value = value.lower()
+
+                conditions.append((column_name, operator, value))
+
+            elif isinstance(item, str) and item in ("and", "or", "*", "+", "&", "|"):
+                # Normalize logical operators
+                conditions.append("&" if item in ("and", "*", "&") else "|")  
+            else:
+                raise ValueError(f"Invalid element in parsed expression: {item}")
+
+        return conditions
+
+    return extract_conditions(parsed_query)
+
+# Define a dictionary to map operators to functions
+operator_functions = {
+    ">": lambda a, b: a > b,
+    ">=": lambda a, b: a >= b,
+    "<": lambda a, b: a < b,
+    "<=": lambda a, b: a <= b,
+    "=": lambda a, b: a == b,
+    "!=": lambda a, b: a != b,
+    "like": lambda a, b: isinstance(a, str) and b in a,
+}
+
 def evaluate_conditions(row, conditions):
+    """
+    Evaluate a list of conditions against a row with optimization.
+    """
     if not conditions:
         return True
-    for column, operator, value, logic_op in conditions:
-        row_value = row[column].strip('°')
+
+    def evaluate_condition(row, condition):
+        """
+        Evaluate a single condition against a row.
+        """
+        column, operator, value = condition
+        row_value = row[column]  # Access directly, no lowercasing
+
         def is_numeric(value):
             try:
                 float(value)
                 return True
             except ValueError:
                 return False
+
         if is_numeric(row_value) and is_numeric(value):
             row_value = float(row_value)
             value = float(value)
         else:
             row_value = str(row_value).lower()
             value = str(value).lower()
-        if operator == '>' and not row_value > value:
-            return False
-        elif operator == '>=' and not row_value >= value:
-            return False
-        elif operator == '<' and not row_value < value:
-            return False
-        elif operator == '<=' and not row_value <= value:
-            return False
-        elif operator == '=' and not row_value == value:
-            return False
-        elif operator == '!=' and not row_value != value:
-            return False
-        elif operator == 'like' and isinstance(row_value, str) and value not in row_value:
-            return False
-    return True
+
+
+        # Get the function for the current operator
+        operator_function = operator_functions.get(operator)
+        if operator_function:
+            # Call the function with appropriate type handling
+            if is_numeric(row_value) and is_numeric(value):
+                return operator_function(float(row_value), float(value))
+            else:
+                return operator_function(str(row_value).lower(), str(value).lower())
+        else:
+            raise ValueError(f"Invalid operator: {operator}")
+
+    # Evaluate the conditions using the appropriate logic (& and |) with optimization
+    result = evaluate_condition(row, conditions[0])
+    for i in range(1, len(conditions), 2):
+        logic_op = conditions[i]  # No need to lowercase or check for other symbols here
+        if logic_op == "|":
+            if result:
+                return True
+            # No else here, continue to next condition
+        next_result = evaluate_condition(row, conditions[i + 1])
+        if logic_op == "&":
+            result = result and next_result
+        elif logic_op == "|":
+            result = result or next_result
+        else:
+            raise ValueError(f"Invalid logic operator: {logic_op}")
+
+    return result
 
 @app.route('/api/list_objects', methods=['POST'])
 def list_objects():
@@ -341,9 +489,6 @@ def list_objects():
 
         def generate():
 
-            # Use defined headers as valid columns for the query parser
-            valid_columns = {header.lower(): header for header in table_headers.keys()}
-    
             # Parse the filter expression into conditions
             try:
                 conditions = parse_query_conditions(filter_expression, valid_columns) if filter_expression else []
