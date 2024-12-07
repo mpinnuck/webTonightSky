@@ -4,8 +4,24 @@
     <meta charset="UTF-8">
     <title>TonightSky v1.0</title>
     <link rel="stylesheet" href="./css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"> 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.2.1"></script>
+    <style>
+        /* Existing styles */
+        #getLocation {
+          background-color: green; /* Initial button color */
+          border: none;
+          padding: 8px 16px;
+          cursor: pointer;
+          transition: background-color 0.3s ease; /* Add a transition for a smooth effect */
+        }
+    
+        #getLocation:active {
+          background-color: darkgreen; /* Change color while pressed */
+        }
+    </style>
+    
     <script>
         // constants
         const ENABLE_LOGGING = false;
@@ -47,7 +63,6 @@
             const dateField = document.getElementById('date');
             const timeField = document.getElementById('local_time');
             const contextMenu = document.getElementById('contextMenu');
-            let longPressTimer;
 
             // Initialize date field
             if (!dateField.value) {
@@ -85,6 +100,7 @@
                     console.error('Timezone input or dropdown not found!');
                     return;
                 }
+
                 // Detect if the user is on a mobile touch device
                 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
                 let isDropdownFocused = false; // Flag to detect focus on dropdown
@@ -138,10 +154,9 @@
 
                 // Show dropdown on focus
                 timezoneInput.addEventListener('focus', () => {
-                    const rect = timezoneInput.getBoundingClientRect();
-
                     timezoneSelect.style.display = 'block'; // Show dropdown
-                        // Find the option matching the current input value
+
+                    // Find the option matching the current input value
                     const currentValue = timezoneInput.value.toLowerCase();
                     const matchingOption = Array.from(timezoneSelect.options).find(
                         (option) => option.value.toLowerCase() === currentValue
@@ -151,9 +166,7 @@
                     if (matchingOption) {
                         timezoneSelect.value = matchingOption.value; // Select the option
                     }
-
                 });
-
 
                 // Handle dropdown click selection
                 timezoneSelect.addEventListener('click', (event) => {
@@ -164,6 +177,7 @@
                         saveSettings(); // Optional: Save the selection
                     }
                 });
+
                 // Add touchstart event for touch devices
                 if (isMobile) {
                     timezoneSelect.addEventListener('touchstart', (event) => {
@@ -176,16 +190,15 @@
                     });
 
                     timezoneSelect.addEventListener('change', (event) => {
-                        timezoneInput.value = event.target.value; // Update the input with the selected value
-                        timezoneSelect.style.display = 'none'; // Hide the dropdown
-                        saveSettings(); // Save the updated value
+                        timezoneInput.value = event.target.value;
+                        timezoneSelect.style.display = 'none';
+                        saveSettings();
                     });
 
                     timezoneSelect.addEventListener('focusout', (event) => {
-                        timezoneSelect.style.display = 'none'; // Hide the dropdown
+                        timezoneSelect.style.display = 'none';
                     });
                 } else {
-
                     // Update dropdown focus state when interacting with it
                     timezoneSelect.addEventListener('mousedown', () => {
                         isDropdownFocused = true;
@@ -195,7 +208,7 @@
                     });
 
                     // Close dropdown only if neither input nor dropdown are focused
-                     timezoneInput.addEventListener('blur', () => {
+                    timezoneInput.addEventListener('blur', () => {
                         setTimeout(() => {
                             if (!isDropdownFocused) {
                                 timezoneSelect.style.display = 'none';
@@ -205,11 +218,81 @@
                 }
             })();
 
+            // Get Current Location Button
+            const getLocationButton = document.createElement('button');
+//            getLocationButton.innerHTML = '<i class="fas fa-location-arrow"></i>'; // Use Font Awesome icon
+            getLocationButton.id = 'getLocation';
+            // Create the icon element
+            getLocationButton.style.backgroundImage = "url('./img/location.png')";
+            getLocationButton.style.backgroundSize = "contain";
+            getLocationButton.style.backgroundRepeat = "no-repeat";
+            getLocationButton.style.backgroundPosition = "center";
+            getLocationButton.style.backgroundColor = "transparent"; // Set background color to transparent
+            getLocationButton.style.border = "none"; // Remove any default border
+            getLocationButton.style.width = "40px"; // Adjust as needed
+            getLocationButton.style.height = "40px"; // Adjust as needed
+            getLocationButton.title = "Get current location and timezone";
+
+            // Add the icon to the button
+//            getLocationButton.appendChild(icon); 
+
+            // Add click event listener to the button
+            getLocationButton.addEventListener('click', () => {
+                event.preventDefault(); // Prevent form submission
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(showPosition, showError);
+                } else {
+                    alert("Geolocation is not supported by this browser.");
+                }
+            });
+
+            // Function to show the position (latitude and longitude)
+            function showPosition(position) {
+                document.getElementById('latitude').value = position.coords.latitude;
+                document.getElementById('longitude').value = position.coords.longitude;
+                // Get the user's current timezone
+                const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                document.getElementById('timezone').value = userTimezone;
+                saveSettings();
+                updateLST();
+            }
+
+            // Function to show an error if geolocation fails
+            function showError(error) {
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        alert("User denied the request for Geolocation.");
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        alert("Location information is unavailable.");
+                        break;
+                    case error.TIMEOUT:
+                        alert("The request to get user location timed out.");
+                        break;
+                    case error.UNKNOWN_ERROR:
+                        alert("An unknown error occurred.");
+                        break;
+                }
+            }
+
+            // Append the button INSIDE the label, after the input field
+            const firstFormRow = document.querySelector('.form-row'); // Select the first .form-row
+            firstFormRow.appendChild(getLocationButton); 
+            // Align the button with the bottom of the timezone input
+            // Use Flexbox for alignment
+            firstFormRow.style.display = 'flex';
+            firstFormRow.style.alignItems = 'flex-end'; 
+
+            // Explicitly set the button's height and remove margins
+            const timezoneInput = document.getElementById('timezone');
+            getLocationButton.style.height = timezoneInput.offsetHeight + 'px';
+            getLocationButton.style.marginTop = '0'; 
+            getLocationButton.style.marginBottom = '0'; 
 
             // Global keydown listener for the Enter key
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
-                    event.preventDefault(); // Prevent default behavior (e.g., form submission or undesired actions)
+                    event.preventDefault(); // Prevent default behavior
                     listObjects(); // Always run the listObjects() function
                 }
             });
@@ -900,7 +983,7 @@
         <header id="appHeader">
             <h1>TonightSky</h1>
             <div class="header-right">
-                <span id="version">v2.2</span>
+                <span id="version">v3.0</span>
                 <button id="helpButton" title="Help">?</button>
             </div>
         </header>
