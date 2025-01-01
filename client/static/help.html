@@ -117,7 +117,7 @@
             <p>The <strong>Filter Query</strong> field allows you to perform SQL-like queries directly on the table data. Use the header names in lowercase, including spaces, to build your query.</p>
             <p><strong>Logical Operators:</strong></p>  
             <ul>
-                <li><code>and</code> = <code>and</code>, <code>*</code>, <code>&amp;</code></li>
+                <li><code>and</code> = <code>and</code>, <code>*</code>, <code>&</code></li>
                 <li><code>or</code> = <code>or</code>, <code>|</code>, <code>+</code></li>
             </ul>
             <p><strong>Example Queries:</strong></p>
@@ -127,8 +127,8 @@
                 <li><code>transit time > '21:00' and altitude > 30</code></li>
                 <li><code>catalog = messier and magnitude < 6</code></li>
                 <li><code>before/after = before and altitude < 20</code></li>
-                <li><code>altitude > 55 &amp; type like galaxy &amp; relative tt < 00:30 &amp; magnitude < 11 and magnitude != ""</code></li>
-                <li><code>(type = Globular Cluster or type = Planetary Nebula) and magnitude &lt; 8</code></li> 
+                <li><code>altitude > 55 & type like galaxy & relative tt < 00:30 & magnitude < 11 and magnitude != ""</code></li>
+                <li><code>(type = Globular Cluster or type = Planetary Nebula) and magnitude < 8</code></li> 
             </ul>
             <p>Clicking on a header will sort the corresponding column in ascending or descending order.</p>
         </section>
@@ -150,7 +150,7 @@
         <section>
             <h2>Tips & Notes</h2>
             <ul>
-                <li>Press eneter after altering settings will rerun the query.</li>
+                <li>Press enter after altering settings will rerun the query.</li>
                 <li>Double-click a row in the table to search for the object on Astrobin.</li>
                 <li>Use the "Filter Query" field to refine your search results (e.g., <code>altitude > 30 and magnitude < 6</code>).</li>
                 <li>The "Object Count" label updates dynamically as objects are loaded into the table.</li>
@@ -159,9 +159,20 @@
         <section>
             <h2>Issues</h2>
             <ul>
-                <li>Query OR logic to do.</li>
+                <li>None.</li>
+            </ul>
+        </section>
+        <section>
+            <h2>Contact & Support</h2>
+            <p>For issues, enhancements, or feedback, please use the following:</p>
+            <ul>
+                <li><a href="https://github.com/your-username/TonightSky" target="_blank" style="color: #98FB98;">GitHub Repository</a></li>
+                <li><a href="mailto:your-email@example.com" style="color: #98FB98;">your-email@example.com</a></li>
             </ul>
         </section>
     </main>
+    <footer>
+        <p>© 2025 TonightSky. All rights reserved.</p>
+    </footer>
 </body>
 </html>
