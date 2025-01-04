@@ -297,7 +297,7 @@ def parse_query_conditions(query, valid_columns):
 
     # Define a condition with the time_value parser for specific columns
     time_condition = Group(
-        pp.oneOf([k.lower() for k in table_headers if table_headers[k]['type'] == 'time'], caseless=True) +
+        pp.oneOf([k.lower() for k in valid_columns if valid_columns[k]['type'] == 'time'], caseless=True) +
         operator + 
         time_value
     )
@@ -325,71 +325,27 @@ def parse_query_conditions(query, valid_columns):
     )
 
     try:
-        # Parse the query string
-        result = expr.parseString(query)
-
-        # Check if the result is a single condition (not nested)
-        if len(result) == 3 and isinstance(result[0], str) and isinstance(result[1], str) and isinstance(result[2], str):
-            parsed_query = [pp.ParseResults(result)]  # Wrap it in a list after converting to pp.ParseResults
-        else:
-            parsed_query = result  # No need to access [0] here
-
-        # --- Flatten the parsed query ---
-        def flatten_parsed_query(parsed_expr):
-            flattened = []
-            for item in parsed_expr:
-                if isinstance(item, pp.ParseResults) and isinstance(item[0], pp.ParseResults):
-                    flattened.extend(flatten_parsed_query(item))
-                else:
-                    flattened.append(item)
-            return flattened
-
-        parsed_query = flatten_parsed_query(parsed_query)
-
+        parsed_query = expr.parseString(query, parseAll=True)
+        return extract_conditions(parsed_query)
     except ParseException as e:
+        print(f"Parse Exception: {e}")
         raise ValueError(f"Invalid query syntax: {e}")
 
-    def extract_conditions(parsed_expr):
-        """
-        Recursively extract conditions from the parsed expression.
-        """
-        conditions = []
-        for item in parsed_expr:
-            if isinstance(item, pp.ParseResults) and len(item) == 3:
+def extract_conditions(parsed_expr):
+    conditions = []
+    for item in parsed_expr:
+        if isinstance(item, pp.ParseResults):
+            if isinstance(item[0], pp.ParseResults):  # Nested ParseResults
+                conditions.append(extract_conditions(item))  # Recursively handle nested conditions
+            elif len(item) == 3:  # Simple condition
                 column, operator, value = item
-
-                # Get column information from valid_columns
                 column_info = valid_columns.get(column.lower())
                 if not column_info:
                     raise ValueError(f"Invalid column: {column}")
-                column_name = column_info["name"]
-                column_type = column_info["type"]
-
-                # Normalize time values
-                # Normalize time values
-                if column_type == "time":
-                    if ":" not in value:  # Add hh:mm:ss if no colon is present
-                        value += ":00:00"
-                    elif value.count(":") == 1:  # Add :ss if only one colon is present
-                        value += ":00" 
-                                # Convert to float if it's a float column
-                try:
-                    if column_type == "float":
-                        value = float(value)
-                except ValueError:
-                    value = value.lower()
-
-                conditions.append((column_name, operator, value))
-
-            elif isinstance(item, str) and item in ("and", "or", "*", "+", "&", "|"):
-                # Normalize logical operators
-                conditions.append("&" if item in ("and", "*", "&") else "|")  
-            else:
-                raise ValueError(f"Invalid element in parsed expression: {item}")
-
-        return conditions
-
-    return extract_conditions(parsed_query)
+                conditions.append((column_info["name"], operator, value))
+        elif isinstance(item, str) and item.lower() in ("and", "or", "*", "+", "&", "|"):
+            conditions.append("&" if item.lower() in ("and", "*", "&") else "|")
+    return conditions
 
 # Define a dictionary to map operators to functions
 operator_functions = {
@@ -403,62 +359,111 @@ operator_functions = {
 }
 
 def evaluate_conditions(row, conditions):
-    """
-    Evaluate a list of conditions against a row with optimization.
-    """
     if not conditions:
         return True
 
-    def evaluate_condition(row, condition):
-        """
-        Evaluate a single condition against a row.
-        """
-        column, operator, value = condition
-        row_value = row[column]  # Access directly, no lowercasing
+    result = None
+    operator = None
+    for i, condition in enumerate(conditions):
+        if isinstance(condition, list):  # Nested condition
+            current = evaluate_conditions(row, condition)
+        elif isinstance(condition, tuple):  # Simple condition
+            current = evaluate_condition(row, condition)
+        else:  # Logical operator
+            operator = condition
+            continue  # Skip immediate evaluation of operator
 
-        def is_numeric(value):
-            try:
-                float(value)
-                return True
-            except ValueError:
-                return False
-
-        if is_numeric(row_value) and is_numeric(value):
-            row_value = float(row_value)
-            value = float(value)
+        if result is None:
+            result = current
         else:
-            row_value = str(row_value).lower()
-            value = str(value).lower()
-
-
-        # Get the function for the current operator
-        operator_function = operator_functions.get(operator)
-        if operator_function:
-            # Call the function with appropriate type handling
-            if is_numeric(row_value) and is_numeric(value):
-                return operator_function(float(row_value), float(value))
+            if operator == '&':
+                result = result and current
+            elif operator == '|':
+                result = result or current
             else:
-                return operator_function(str(row_value).lower(), str(value).lower())
-        else:
-            raise ValueError(f"Invalid operator: {operator}")
+                raise ValueError(f"Unknown logical operator: {operator}")
+            operator = None  # Reset operator for next iteration
 
-    # Evaluate the conditions using the appropriate logic (& and |) with optimization
-    result = evaluate_condition(row, conditions[0])
-    for i in range(1, len(conditions), 2):
-        logic_op = conditions[i]  # No need to lowercase or check for other symbols here
-        if logic_op == "|":
-            if result:
-                return True
-            # No else here, continue to next condition
-        next_result = evaluate_condition(row, conditions[i + 1])
-        if logic_op == "&":
-            result = result and next_result
-        elif logic_op == "|":
-            result = result or next_result
-        else:
-            raise ValueError(f"Invalid logic operator: {logic_op}")
+    if operator is not None:
+        logger.error(f"Unapplied operator found at end of conditions: {operator}")
+        raise ValueError("Malformed condition structure: Unapplied operator at the end")
 
     return result
+
+def evaluate_condition(row, condition):
+    column, operator, value = condition
+    row_value = row[column]
+
+    def is_numeric(value):
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+
+    if is_numeric(row_value) and is_numeric(value):
+        row_value = float(row_value)
+        value = float(value)
+    else:
+        row_value = str(row_value).lower()
+        value = str(value).lower()
+
+    operator_function = operator_functions.get(operator)
+    if operator_function:
+        return operator_function(row_value, value)
+    else:
+        raise ValueError(f"Invalid operator: {operator}")
+
+def test_query_parsing_and_evaluation():
+    sample_row = {
+        'Altitude': '45.0',
+        'Type': 'galaxy',
+        'Magnitude': '8.0',
+        'Relative TT': '00:15:00'  # Assuming this is how 'relative tt' looks in your data
+    }
+    valid_columns = {
+        'altitude': {'name': 'Altitude', 'type': 'float'},
+        'type': {'name': 'Type', 'type': 'string'},
+        'magnitude': {'name': 'Magnitude', 'type': 'float'},
+        'relative tt': {'name': 'Relative TT', 'type': 'time'}  # Added 'relative tt' with 'time' type
+    }
+
+    # Function to convert time string to seconds for comparison
+    def time_to_seconds(time_str):
+        h, m, s = map(int, time_str.split(':'))
+        return h * 3600 + m * 60 + s
+
+    # Test cases with query strings and expected outcomes
+    test_cases = [
+        ("altitude > 55 and relative tt < 00:30:00", False),  # Your problematic query
+        ("altitude > 30", True),
+        ("altitude > 30 and magnitude < 10", True),
+        ("altitude > 30 and (type like galaxy or type like nebula) and magnitude < 10", True),
+        ("altitude > 50", False),
+        ("altitude > 50 or magnitude < 5", False),
+        ("(altitude > 30 and magnitude < 10) or altitude > 50", True),
+        ("relative tt < 00:30:00", True),  # Test for relative tt
+        ("relative tt > 00:20:00", False),  # Test for relative tt
+    ]
+
+    for query, expected in test_cases:
+        try:
+            # Parse the query string to conditions
+            conditions = parse_query_conditions(query, valid_columns)
+            
+            # Evaluate the conditions
+            result = evaluate_conditions(sample_row, conditions)
+            
+            # Check if the result matches the expected outcome
+            if result != expected:
+                print(f"Test failed for query '{query}': Expected {expected}, but got {result}")
+            else:
+                print(f"Test passed for query '{query}'")
+        except ValueError as e:
+            print(f"Test raised an unexpected error for query '{query}': {e}")
+
+    print("All tests executed.")
+
 
 @app.route('/api/list_objects', methods=['POST'])
 def list_objects():
@@ -474,6 +479,9 @@ def list_objects():
         return response, 200  # Return a 200 OK for preflight
 
     try:
+
+#        test_query_parsing_and_evaluation()
+
         start_time = time.perf_counter()  # Record the start time
         data = request.json
         latitude = float(data['latitude'])
@@ -530,8 +538,8 @@ def list_objects():
                     'Direction': direction,
                     'Relative TT': format_transit_time(transit_time_minutes),
                     'Before/After': before_after,
-                    'Altitude': f"{altitude:.2f}°",
-                    'Azimuth': f"{azimuth:.2f}°",
+                    'Altitude': f"{altitude:.2f}",
+                    'Azimuth': f"{azimuth:.2f}",
                     'Alt Name': row.get('Alt Name', ''),
                     'Type': row['Type'],
                     'Magnitude': row['Magnitude'],
@@ -543,6 +551,9 @@ def list_objects():
                 if not evaluate_conditions(current_row, conditions):
                     continue
 
+                # add degrees symbols
+                current_row['Altitude'] +=  '°'
+                current_row['Azimuth'] +=  '°'
                 # Stream the matching object as a JSON object
                 included_count += 1
                 yield json.dumps(current_row) + "\n"
