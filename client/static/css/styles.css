@@ -115,10 +115,9 @@ button:hover {
     background-color: #ffffff; /* Ensure a white background */
     padding: 0; /* Remove padding for alignment */
     margin: 0; /* Remove any margin */
-    max-height: calc(100vh - 300px); /* Adjust based on the height of form and other elements */
+    max-height: calc(100vh - 340px); /* Adjust based on the height of form and other elements */
     box-sizing: border-box; /* Include border in height calculation */
     width: 100%; /* Adjust the width as needed */
-    max-height: calc(100vh - 300px); /* Adjust for other UI elements */
     padding-bottom: 10px; /* Space to ensure last row visibility */
 }
 /* Table Styling */
