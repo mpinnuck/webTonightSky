@@ -37,7 +37,7 @@ from pyparsing import (
 #   GLOBALS
 #
 # Constants
-VERSION = "2.0"
+VERSION = "3.4"
 
 #############################
 # Set up logging
@@ -239,6 +239,10 @@ def calculate_lst():
         local_time_str = f"{data['date']} {data['local_time']}"
         timezone = pytz.timezone(data['timezone'])
         local_time = timezone.localize(datetime.strptime(local_time_str, "%Y-%m-%d %H:%M"))
+        # Check if the time is in AM and should be considered as the next day
+        if local_time.hour < 12:
+            local_time = local_time + timedelta(days=1)
+
         utc_time = local_time.astimezone(pytz.utc)
         lst_hours = Time(utc_time).sidereal_time('mean', longitude * u.deg).hour
         return jsonify({"LST": f"{int(lst_hours):02}:{int((lst_hours*60)%60):02}:{int((lst_hours*3600)%60):02}"})
@@ -489,6 +493,10 @@ def list_objects():
         local_time_str = f"{data['date']} {data['local_time']}"
         timezone = pytz.timezone(data['timezone'])
         local_time = timezone.localize(datetime.strptime(local_time_str, "%Y-%m-%d %H:%M"))
+        # Check if the time is in AM and should be considered as the next day
+        if local_time.hour < 12:
+            local_time = local_time + timedelta(days=1)
+
         filter_expression = data.get("filter_expression", "")
         catalog_filters = data.get("catalogs", {})
 

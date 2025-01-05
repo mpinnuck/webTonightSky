@@ -100,6 +100,23 @@
                 }
             });
 
+            // Fetch version from server
+            fetch(`${APP_SERVER}version`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('version').textContent = `v${data.version}`;
+                })
+                .catch(error => {
+                    console.error('Error fetching version:', error);
+                    document.getElementById('version').textContent = 'vUnknown'; // Fallback if fetching fails
+                });
+
+
             // Timezone dropdown logic
             (() => {
                 const timezoneInput = document.getElementById('timezone');
@@ -478,19 +495,27 @@
         }
 
         function appendRow(obj) {
+            const row = createRow(obj);
+            addRowEventListeners(row, obj);
             const tableBody = document.getElementById('resultsTableBody');
-            const row = document.createElement('tr');
+            tableBody.appendChild(row);
+        }
 
+        function createRow(obj) {
+            const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td><td>${obj["Direction"]}</td>
                 <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td class="altitude-cell">${obj.Altitude}</td>
                 <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
                 <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
             `;
+            return row;
+        }
 
+        function addRowEventListeners(row, obj) {
             // Add double-click event to open Astrobin link
             row.addEventListener('dblclick', () => {
-                const objectName = obj.Name.replace(/\s+/g, ''); // Remove spaces for Astrobin search
+                const objectName = obj.Name.replace(/\s+/g, '');
                 const astrobinUrl = `https://www.astrobin.com/search/?q=${encodeURIComponent(objectName)}`;
                 window.open(astrobinUrl, '_blank');
             });
@@ -499,43 +524,24 @@
             row.addEventListener('contextmenu', (event) => {
                 event.preventDefault();
                 showContextMenu(event.pageX, event.pageY, obj);
+            }, { passive: false });
+
+            // Highlight row on click
+            row.addEventListener('click', () => {
+                const previouslyHighlightedRow = document.querySelector('.highlighted-row');
+                if (previouslyHighlightedRow) {
+                    previouslyHighlightedRow.classList.remove('highlighted-row');
+                }
+                row.classList.add('highlighted-row');
             });
 
-            // Add click event listener to the "Altitude" cell
+            // Add click and touchstart events to the altitude cell
             const altitudeCell = row.querySelector('.altitude-cell');
-            // Shared handler for fetching altitude data
-            const handleAltitudeFetch = () => {
-                fetchAltitudeData(obj);
-            };
-
-            // Add click listener (for desktops and some mobiles)
-            altitudeCell.addEventListener('click', handleAltitudeFetch);
-
-            // Add touchstart listener (for mobile devices as a fallback)
+            altitudeCell.addEventListener('click', () => fetchAltitudeData(obj), { passive: true });
             altitudeCell.addEventListener('touchstart', (event) => {
-                // Prevent default touch behavior to avoid interference
                 event.preventDefault();
                 fetchAltitudeData(obj);
-            });
-    
-            row.addEventListener('click', () => {
-                // Check if the row is already highlighted
-                if (row.classList.contains('highlighted-row')) {
-                    // If highlighted, remove the highlight
-                    row.classList.remove('highlighted-row');
-                } else {
-                    // Remove highlight from any previously highlighted row
-                    const previouslyHighlightedRow = document.querySelector('.highlighted-row');
-                    if (previouslyHighlightedRow) {
-                        previouslyHighlightedRow.classList.remove('highlighted-row');
-                    }
-                    // Highlight the clicked row
-                    row.classList.add('highlighted-row');
-                }
-            });
-
-            tableBody.appendChild(row);
- 
+            }, { passive: false });
         }
 
 
@@ -989,14 +995,14 @@
             <h1>TonightSky</h1>
             <div class="header-right">
                 <span id="version">v3.3</span>
-                <button id="helpButton" title="Help">?</button>
+                <button id="helpButton" title="Help" aria-label="Open Help Information">?</button>
             </div>
         </header>
         <form onsubmit="event.preventDefault(); listObjects();" id="topForm">
             <div class="form-row">
-                <label class="label-input">Latitude: <input type="text" id="latitude" value="-33.713611"></label>
-                <label class="label-input">Longitude: <input type="text" id="longitude" value="151.090278"></label>
-                <label class="dropdown-input">
+                <label class="label-input" for="latitude" aria-label="Enter Latitude">Latitude: <input type="text" id="latitude" value="-33.713611"></label>
+                <label class="label-input" for="longitude" aria-label="Enter Longitude">Longitude: <input type="text" id="longitude" value="151.090278"></label>
+                <label class="dropdown-input" for="timezone" aria-label="Select Timezone">
                     Timezone:
                     <input type="text" id="timezone" placeholder="Search timezones..." autocomplete="off" />
                     <select id="timezoneDropdown" size="5" style="display: none; width: 100%;"></select>
@@ -1005,32 +1011,32 @@
             
             <!-- Second Row: Date, Local Time, LST -->
             <div class="form-row">
-                <label class="label-input">Date: <input type="date" id="date"></label>
-                <label class="label-input">Local Time: <input type="time" id="local_time" value="23:59"></label>
-                <label class="label-input">LST: <span id="lst_display">00:00:00</span></label>
+                <label class="label-input" for="date" aria-label="Select Date">Date: <input type="date" id="date"></label>
+                <label class="label-input" for="local_time" aria-label="Set Local Time">Local Time: <input type="time" id="local_time" value="00:00:00"></label>
+                <label class="label-input" aria-label="Local Sidereal Time">LST: <span id="lst_display">00:00:00</span></label>
             </div>
             
             <!-- Third Row: Catalog Filters -->
             <div class="form-row">
                 <span class="label">Catalog:</span>
-                <label><input type="checkbox" name="catalogs" value="Messier" checked> Messier</label>
-                <label><input type="checkbox" name="catalogs" value="NGC"> NGC</label>
-                <label><input type="checkbox" name="catalogs" value="IC"> IC</label>
-                <label><input type="checkbox" name="catalogs" value="Caldwell"> Caldwell</label>
-                <label><input type="checkbox" name="catalogs" value="Abell"> Abell</label>
-                <label><input type="checkbox" name="catalogs" value="Sharpless"> Sharpless</label>
+                <label for="catalogMessier" aria-label="Toggle Messier Catalog"><input type="checkbox" name="catalogs" id="catalogMessier" value="Messier" checked> Messier</label>
+                <label for="catalogNGC" aria-label="Toggle NGC Catalog"><input type="checkbox" name="catalogs" id="catalogNGC" value="NGC"> NGC</label>
+                <label for="catalogIC" aria-label="Toggle IC Catalog"><input type="checkbox" name="catalogs" id="catalogIC" value="IC"> IC</label>
+                <label for="catalogCaldwell" aria-label="Toggle Caldwell Catalog"><input type="checkbox" name="catalogs" id="catalogCaldwell" value="Caldwell"> Caldwell</label>
+                <label for="catalogAbell" aria-label="Toggle Abell Catalog"><input type="checkbox" name="catalogs" id="catalogAbell" value="Abell"> Abell</label>
+                <label for="catalogSharpless" aria-label="Toggle Sharpless Catalog"><input type="checkbox" name="catalogs" id="catalogSharpless" value="Sharpless"> Sharpless</label>
             </div>
             
             <!-- Fourth Row: Filter Query -->
             <div class="form-row full-width">
-                <label>Filter Query:</label>
+                <label for="filter_expression" aria-label="Enter Filter Query">Filter Query:</label>
                 <input type="text" id="filter_expression" class="wide-input" placeholder="e.g., altitude > 30 and magnitude < 6">
             </div>
                 
             <!-- Button Row -->
             <div class="button-row">
-                <button type="submit" id="listObjectsButton">List Objects</button>
-                <span id="objectCount" class="object-count-label">Object Count: 0</span>
+                <button type="submit" id="listObjectsButton" aria-label="List Celestial Objects">List Objects</button>
+                <span id="objectCount" class="object-count-label" aria-label="Current Object Count">Object Count: 0</span>
             </div>
         </form>
         <!-- Log Output 
@@ -1089,6 +1095,7 @@
             <p class="tip"><strong>Tip:</strong> Right-click or click on altitude cell to show an altitude graph</p>
             
             <!-- Notes -->
+            <p class="note"><strong>Note:</strong> Times between 00:00 to 11:59 are treated as the next day</p>
             <p class="note"><strong>Note:</strong> Loading a large catalog (e.g., 10,000 objects) may take 60+ seconds.</p>
             <p class="note"><strong>Note:</strong> Objects with -ve altitude at the nominated time are not included in the results.</p>
         </div>

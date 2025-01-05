@@ -127,7 +127,7 @@
                 <li><code>transit time > '21:00' and altitude > 30</code></li>
                 <li><code>catalog = messier and magnitude < 6</code></li>
                 <li><code>before/after = before and altitude < 20</code></li>
-                <li><code>altitude > 55 & type like galaxy & relative tt < 00:30 & magnitude < 11 and magnitude != ""</code></li>
+                <li><code>altitude > 55 & (type like galaxy | type like nebula) & relative tt < 00:30 & magnitude < 11 and magnitude != ""</code></li>
                 <li><code>(type = Globular Cluster or type = Planetary Nebula) and magnitude < 8</code></li> 
             </ul>
             <p>Clicking on a header will sort the corresponding column in ascending or descending order.</p>
@@ -150,6 +150,7 @@
         <section>
             <h2>Tips & Notes</h2>
             <ul>
+                <li>Times between 00:00 to 11:59 are treated as the morning of the next day.</li>
                 <li>Press enter after altering settings will rerun the query.</li>
                 <li>Double-click a row in the table to search for the object on Astrobin.</li>
                 <li>Use the "Filter Query" field to refine your search results (e.g., <code>altitude > 30 and magnitude < 6</code>).</li>
