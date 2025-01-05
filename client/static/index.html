@@ -53,6 +53,18 @@
         ////////
         logMessage(`Using API server: ${APP_SERVER}`);
 
+        function setTodayDate() {
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; // Get user's timezone
+            const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone }); // Format in ISO 8601 (yyyy-MM-dd)
+
+            const dateInput = document.getElementById('date'); // Target the date input field
+            if (dateInput) {
+                dateInput.value = today; // Set the value to today's date
+            } else {
+                console.error('Date input field not found!');
+            }
+        }
+
         /////////////////////////////////////////////////////////////////////////////////
         //
         //  Setup app events that except for events related to list items
@@ -64,11 +76,8 @@
             const timeField = document.getElementById('local_time');
             const contextMenu = document.getElementById('contextMenu');
 
-            // Initialize date field
-            if (!dateField.value) {
-                const today = new Date().toISOString().split('T')[0];
-                dateField.value = today;
-            }
+            // Call the function to set today's date
+            setTodayDate();
 
             // Add event listeners for LST updates and saving settings
             addResizers();
@@ -623,10 +632,6 @@
                     cb.checked = !!catalogFilters[cb.value];
                 });
             }
-
-            // Set the date to now
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('date').value = today;
         }
 
         async function fetchAltitudeData(object) {
@@ -983,7 +988,7 @@
         <header id="appHeader">
             <h1>TonightSky</h1>
             <div class="header-right">
-                <span id="version">v3.0</span>
+                <span id="version">v3.3</span>
                 <button id="helpButton" title="Help">?</button>
             </div>
         </header>
@@ -1001,7 +1006,7 @@
             <!-- Second Row: Date, Local Time, LST -->
             <div class="form-row">
                 <label class="label-input">Date: <input type="date" id="date"></label>
-                <label class="label-input">Local Time: <input type="time" id="local_time" value="22:00"></label>
+                <label class="label-input">Local Time: <input type="time" id="local_time" value="23:59"></label>
                 <label class="label-input">LST: <span id="lst_display">00:00:00</span></label>
             </div>
             
