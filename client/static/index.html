@@ -702,6 +702,7 @@
             const firstTime = data.times[0];
             const [firstHour, firstMinute] = firstTime.split(':').map(Number);
             const firstTimeInMinutes = firstHour * 60 + firstMinute;
+            const hourStart = firstHour * 60; // Minutes at the start of the hour, e.g., 19:00 = 1140 minutes
 
             const timeInMinutes = data.times.map(time => {
                 const [hour, minute] = time.split(':').map(Number);
@@ -712,7 +713,7 @@
                     totalMinutes += 1440; // Add 24 hours in minutes for times after midnight
                 }
 
-                return totalMinutes - firstTimeInMinutes;
+                return totalMinutes - hourStart;
             });
 
 
@@ -722,7 +723,8 @@
             const dawnMinutes = (parseTimeToMinutes(data.astronomical_dawn, firstTimeInMinutes) - firstTimeInMinutes) / 10;
             const duskMinutes = (parseTimeToMinutes(data.astronomical_dusk, firstTimeInMinutes) - firstTimeInMinutes) / 10;
             const transitMinutes = (parseTimeToMinutes(data.transit_time, firstTimeInMinutes) - firstTimeInMinutes) / 10;
-            const midnightMinutes = ((24 * 60 - firstTimeInMinutes) % 1440) / 10; // Calculate midnight position
+
+            const midnightMinutes = (parseTimeToMinutes("00:00", firstTimeInMinutes) - (firstTimeInMinutes)) / 10;
 
             const verticalLines = [
                 { position: transitMinutes, label: 'Transit', color: 'red' },
