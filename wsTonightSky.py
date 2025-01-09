@@ -37,7 +37,7 @@ from pyparsing import (
 #   GLOBALS
 #
 # Constants
-VERSION = "3.4"
+VERSION = "3.6"
 
 #############################
 # Set up logging
