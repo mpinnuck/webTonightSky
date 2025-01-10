@@ -713,7 +713,7 @@
                     totalMinutes += 1440; // Add 24 hours in minutes for times after midnight
                 }
 
-                return totalMinutes - hourStart;
+                return totalMinutes - firstTimeInMinutes;
             });
 
 
@@ -859,7 +859,7 @@
                         const xPosition = scales.x.getPixelForValue(index);
 
                         // Only draw vertical grid lines at hourly intervals
-                        if (minute % 60 === 0) {
+                        if ((minute + firstTimeInMinutes) % 60 === 0) {
                             const isNight = minute >= duskMinutes && minute <= dawnMinutes;
 
                             // Draw vertical line
