@@ -37,8 +37,7 @@ from pyparsing import (
 #   GLOBALS
 #
 # Constants
-VERSION = "3.6"
-
+VERSION = "3.8"
 #############################
 # Set up logging
 # Ensure the log directory exists
@@ -54,7 +53,7 @@ rotating_handler = RotatingFileHandler(
 )
 
 # Set formatter for the rotating handler
-rotating_handler.setFormatter(logging.Formatter(
+formatter = rotating_handler.setFormatter(logging.Formatter(
     "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 ))
 
@@ -63,6 +62,13 @@ logger = logging.getLogger("TonightSky")
 logger.setLevel(logging.DEBUG)  # Set the logging level
 logger.addHandler(rotating_handler)
 
+# Add console handler in development mode
+if os.environ.get("FLASK_DEBUG") == "1":
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    logger.info("Console logging enabled in development mode")
+    
 logger.info("Logging initialized with file rotation.")
 
 app = Flask(__name__)
@@ -252,14 +258,22 @@ def calculate_lst():
 
 # Helper functions
 def calculate_transit_and_alt_az(ra_deg, dec_deg, latitude, longitude, local_time):
+    astropy_time, location, altaz, lst = calc_time_location_and_lst(latitude, longitude, local_time)
+    return calc_transit_and_alt_az(ra_deg, dec_deg, local_time, astropy_time, location, altaz, lst)
+
+
+def calc_time_location_and_lst(latitude, longitude, local_time):
     astropy_time = Time(local_time.astimezone(pytz.utc))
     location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg, height=0 * u.m)
-    target = SkyCoord(ra=ra_deg * u.deg, dec=dec_deg * u.deg)
     altaz = AltAz(obstime=astropy_time, location=location)
+    lst = astropy_time.sidereal_time('mean', longitude * u.deg).hour
+    return astropy_time, location, altaz, lst
+
+def calc_transit_and_alt_az(ra_deg, dec_deg, local_time, astropy_time, location, altaz, lst):
+    target = SkyCoord(ra=ra_deg * u.deg, dec=dec_deg * u.deg)
     altaz_coord = target.transform_to(altaz)
     altitude = altaz_coord.alt.deg
     azimuth = altaz_coord.az.deg
-    lst = astropy_time.sidereal_time('mean', longitude * u.deg).hour
     ra_hours = ra_deg / 15.0
     time_diff_hours = ra_hours - lst
     if time_diff_hours > 12:
@@ -271,6 +285,8 @@ def calculate_transit_and_alt_az(ra_deg, dec_deg, latitude, longitude, local_tim
     local_transit_time = local_time + timedelta(minutes=transit_time_minutes if before_after == "After" else -transit_time_minutes)
     direction = "south" if azimuth > 90 and azimuth < 270 else "north"
     return transit_time_minutes, local_transit_time.strftime("%H:%M:%S"), before_after, altitude, azimuth, direction
+
+    
 
 def degrees_to_ra(degrees):
     hours = int(degrees // 15)
@@ -516,6 +532,9 @@ def list_objects():
             row_count = 0
             included_count = 0
 
+            astropy_time, location, altaz, lst = calc_time_location_and_lst(latitude, longitude, local_time)
+
+
             for row in catalog_table:
                 row_count += 1
                 #if row_count % 500 == 0:
@@ -531,8 +550,9 @@ def list_objects():
                 dec = float(row['Dec'])
 
                 # Calculate transit time and AltAz
-                transit_time_minutes, local_transit_time, before_after, altitude, azimuth, direction = calculate_transit_and_alt_az(
-                    ra, dec, latitude, longitude, local_time)
+                transit_time_minutes, local_transit_time, before_after, altitude, azimuth, direction = calc_transit_and_alt_az(
+                    ra, dec, local_time, astropy_time, location, altaz, lst)
+
 
                 if altitude < 0:
                     continue
@@ -585,17 +605,3 @@ def list_objects():
         return jsonify({"error": "An unexpected error occurred."}), 500
 
    
-if __name__ == "__main__":
-    logger.info(f"main() TonightSky version: {VERSION}")
-    # Determine the Flask environment
-    flask_env = os.environ.get("FLASK_ENV", "production").lower()  # Default to 'production'
-
-    print(f"Environment detected: {flask_env}")
-
-    if flask_env == "development":
-        # Run in development mode with debug enabled
-        app.run(debug=True)
-    else:
-        # Run in production mode without debug
-        app.run(debug=False)
-    
