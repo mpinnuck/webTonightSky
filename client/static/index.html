@@ -65,6 +65,19 @@
             }
         }
 
+        async function errorHandler(response, customMessage) {
+            if (!response.ok) {
+                const errorData = await response.json();
+                const errorMessage = errorData.error; // Extract from the JSON
+                document.getElementById("errorMessage").textContent = `${customMessage}: ${errorMessage}`;
+                document.getElementById("errorMessage").style.display = "inline-block";
+                return true; // Signal error was handled
+            } else {
+                document.getElementById("errorMessage").style.display = "none";
+                return false; // Signal no error was found
+            }
+        }
+
         /////////////////////////////////////////////////////////////////////////////////
         //
         //  Setup app events that except for events related to list items
@@ -102,9 +115,10 @@
 
             // Fetch version from server
             fetch(`${APP_SERVER}version`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
+                .then(async response => {
+                    if (await errorHandler(response, 'Failed to fetch version')) {
+                         document.getElementById('version').textContent = 'vUnknown'; // Fallback if fetching fails
+                         return;
                     }
                     return response.json();
                 })
@@ -412,7 +426,7 @@
                     body: JSON.stringify({ longitude, date, local_time, timezone })
                 });
 
-                if (!response.ok) throw new Error('Failed to calculate LST');
+                if (await errorHandler(response, 'Failed to calculate LST')) return;
                 
                 const data = await response.json();
                 document.getElementById('lst_display').textContent = data.LST;
@@ -452,7 +466,7 @@
                     body: JSON.stringify({ latitude, longitude, date, local_time, timezone, filter_expression, catalogs })
                 });
 
-                if (!response.ok) throw new Error('Failed to fetch data');
+                if (await errorHandler(response, 'Failed to fetch data')) return;
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder("utf-8");
@@ -656,7 +670,7 @@
                     })
                 });
 
-                if (!response.ok) throw new Error('Failed to fetch altitude data');
+                if (await errorHandler(response, 'Failed to fetch altitude data')) return;
 
                 const data = await response.json();
                 logMessage("Have altitude data:");
@@ -1039,6 +1053,7 @@
             <div class="button-row">
                 <button type="submit" id="listObjectsButton" aria-label="List Celestial Objects">List Objects</button>
                 <span id="objectCount" class="object-count-label" aria-label="Current Object Count">Object Count: 0</span>
+                <span id="errorMessage" style="color: red; margin-left:10px; display:none;"></span>
             </div>
         </form>
         <!-- Log Output 

@@ -37,7 +37,7 @@ from pyparsing import (
 #   GLOBALS
 #
 # Constants
-VERSION = "3.8"
+VERSION = "3.9"
 #############################
 # Set up logging
 # Ensure the log directory exists
@@ -516,18 +516,19 @@ def list_objects():
         filter_expression = data.get("filter_expression", "")
         catalog_filters = data.get("catalogs", {})
 
+        # Parse the filter expression into conditions
+        try:
+            conditions = parse_query_conditions(filter_expression, valid_columns) if filter_expression else []
+        except ValueError as e:
+            logger.error(f"Query parsing error: {e}")
+            return jsonify({"error": f"Query parsing error: {e}"}), 400
+
+
         # Check if all catalogs are unselected (treat as select all if true)
         all_catalogs_unselected = all(not selected for selected in catalog_filters.values()) if catalog_filters else True
 
         def generate():
 
-            # Parse the filter expression into conditions
-            try:
-                conditions = parse_query_conditions(filter_expression, valid_columns) if filter_expression else []
-            except ValueError as e:
-                logger.error(f"Query parsing error: {e}")
-                yield json.dumps({"error": f"Query parsing error: {e}"})
-                return
 
             row_count = 0
             included_count = 0
@@ -600,6 +601,9 @@ def list_objects():
     except KeyError as e:
         logger.error(f"Missing data field: {e}")
         return jsonify({"error": f"Missing data field: {e}"}), 400
+    except ValueError as e:
+       logger.error(f"Value error: {e}")
+       return jsonify({"error": f"Value error: {e}"}), 400
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         return jsonify({"error": "An unexpected error occurred."}), 500
