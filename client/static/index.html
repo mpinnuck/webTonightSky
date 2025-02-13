@@ -518,10 +518,21 @@
         function createRow(obj) {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${obj.Name}</td><td>${obj.RA}</td><td>${obj.Dec}</td><td>${obj["Transit Time"]}</td><td>${obj["Direction"]}</td>
-                <td>${obj["Relative TT"]}</td><td>${obj["Before/After"]}</td><td class="altitude-cell">${obj.Altitude}</td>
-                <td>${obj.Azimuth}</td><td>${obj["Alt Name"]}</td><td>${obj.Type}</td>
-                <td>${obj.Magnitude}</td><td>${obj.Info}</td><td>${obj.Catalog}</td>
+                <td>${obj.Name}</td><td>${obj.RA}</td>
+                <td>${obj.Dec}</td>
+                <td>${obj["Transit Time"]}</td>
+                <td>${obj["Transit Alt"]}</td>
+                <td>${obj["Direction"]}</td>
+                <td>${obj["Relative TT"]}</td>
+                <td>${obj["Before/After"]}</td>
+                <td class="altitude-cell">${obj.Altitude}</td>
+                <td>${obj.Azimuth}</td>
+                <td>${obj["Alt Name"]}</td>
+                <td>${obj.Type}</td>
+                <td>${obj.Magnitude}</td>
+                <td>${obj["Size"]}</td>
+                <td>${obj.Info}</td>
+                <td>${obj.Catalog}</td>
             `;
             return row;
         }
@@ -1010,7 +1021,7 @@
         <header id="appHeader">
             <h1>TonightSky</h1>
             <div class="header-right">
-                <span id="version">v3.3</span>
+                <span id="version">v4.0</span>
                 <button id="helpButton" title="Help" aria-label="Open Help Information">?</button>
             </div>
         </header>
@@ -1069,16 +1080,18 @@
                         <th onclick="sortTableByColumn(1)">RA</th>
                         <th onclick="sortTableByColumn(2)">Dec</th>
                         <th onclick="sortTableByColumn(3)">Transit Time</th>
-                        <th onclick="sortTableByColumn(4)">Direction</th>
-                        <th onclick="sortTableByColumn(5)">Relative TT</th>
-                        <th onclick="sortTableByColumn(6)">Before/After</th>
-                        <th onclick="sortTableByColumn(7)">Altitude</th>
-                        <th onclick="sortTableByColumn(8)">Azimuth</th>
-                        <th onclick="sortTableByColumn(9)">Alt Name</th>
-                        <th onclick="sortTableByColumn(10)">Type</th>
-                        <th onclick="sortTableByColumn(11)">Magnitude</th>
-                        <th onclick="sortTableByColumn(12)">Info</th>
-                        <th onclick="sortTableByColumn(13)">Catalog</th>
+                        <th onclick="sortTableByColumn(4)">Transit Alt</th>
+                        <th onclick="sortTableByColumn(5)">Direction</th>
+                        <th onclick="sortTableByColumn(6)">Relative TT</th>
+                        <th onclick="sortTableByColumn(7)">Before/After</th>
+                        <th onclick="sortTableByColumn(8)">Altitude</th>
+                        <th onclick="sortTableByColumn(9)">Azimuth</th>
+                        <th onclick="sortTableByColumn(10)">Alt Name</th>
+                        <th onclick="sortTableByColumn(11)">Type</th>
+                        <th onclick="sortTableByColumn(12)">Magnitude</th>
+                        <th onclick="sortTableByColumn(13)">Size</th>
+                        <th onclick="sortTableByColumn(14)">Info</th>
+                        <th onclick="sortTableByColumn(15)">Catalog</th>
                     </tr>
                 </thead>
                 <tbody id="resultsTableBody">

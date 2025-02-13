@@ -37,7 +37,7 @@ from pyparsing import (
 #   GLOBALS
 #
 # Constants
-VERSION = "3.9"
+VERSION = "4.0"
 #############################
 # Set up logging
 # Ensure the log directory exists
@@ -84,6 +84,7 @@ table_headers = {
     "RA": {"name": "RA", "type": "time"},
     "Dec": {"name": "Dec", "type": "string"},  
     "Transit Time": {"name": "Transit Time", "type": "time"},
+    "Transit Alt": {"name": "Transit Alt", "type": "float"},
     "Direction": {"name": "Direction", "type": "string"},
     "Relative TT": {"name": "Relative TT", "type": "time"},
     "Before/After": {"name": "Before/After", "type": "string"},
@@ -92,6 +93,7 @@ table_headers = {
     "Alt Name": {"name": "Alt Name", "type": "string"},
     "Type": {"name": "Type", "type": "string"},
     "Magnitude": {"name": "Magnitude", "type": "float"},
+    "Size": {"name": "Size", "type": "float"},
     "Info": {"name": "Info", "type": "string"},
     "Catalog": {"name": "Catalog", "type": "string"}
 }
@@ -235,6 +237,35 @@ def altitude_data():
     except Exception as e:
         logger.error(f"General error in altitude_data: {e}")
         return jsonify({"error": "An error occurred while calculating altitude data"}), 500
+
+def calc_transit_altitude(ra_deg, dec_deg, latitude, longitude):
+    """
+    Calculate the transit altitude of a celestial object based on its declination and observer's latitude.
+
+    The transit altitude is the maximum altitude an object reaches when it crosses the observer's meridian.
+    It is given by: 
+        Transit Altitude = 90° - |Latitude - Declination|
+
+    Parameters:
+    - ra_deg (float): Right Ascension in degrees (not used in altitude calculation).
+    - dec_deg (float): Declination of the object in degrees.
+    - latitude (float): Observer's latitude in degrees.
+    - longitude (float): Observer's longitude in degrees (not used in transit altitude calculation).
+
+    Returns:
+    - float: The transit altitude in degrees.
+    """
+    # Ensure declination and latitude are within valid ranges
+    if not (-90 <= dec_deg <= 90):
+        raise ValueError("Declination must be between -90 and 90 degrees")
+    if not (-90 <= latitude <= 90):
+        raise ValueError("Latitude must be between -90 and 90 degrees")
+
+    # Calculate transit altitude using the absolute difference between latitude and declination
+    transit_alt = 90 - abs(latitude - dec_deg)
+
+    # Ensure altitude remains within the valid range of -90° to +90°
+    return max(-90, min(90, transit_alt))
     
 
 @app.route('/api/calculate_lst', methods=['POST'])
@@ -558,12 +589,16 @@ def list_objects():
                 if altitude < 0:
                     continue
 
+                transit_alt = calc_transit_altitude(ra, dec, latitude, longitude)
+
+
                 # Build the row object
                 current_row = {
                     'Name': row['Name'],
                     'RA': degrees_to_ra(ra),
                     'Dec': format_dec(dec),
                     'Transit Time': local_transit_time,
+                    'Transit Alt': f"{transit_alt:.2f}",
                     'Direction': direction,
                     'Relative TT': format_transit_time(transit_time_minutes),
                     'Before/After': before_after,
@@ -572,6 +607,7 @@ def list_objects():
                     'Alt Name': row.get('Alt Name', ''),
                     'Type': row['Type'],
                     'Magnitude': row['Magnitude'],
+                    'Size': ' ',
                     'Info': row['Info'],
                     'Catalog': row['Catalog']
                 }

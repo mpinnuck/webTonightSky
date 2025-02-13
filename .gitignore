@@ -1,3 +1,4 @@
 venv/
 __pycache__/
 tonightsky.log
+__pycache__/wsTonightSky.cpython-312.pyc
