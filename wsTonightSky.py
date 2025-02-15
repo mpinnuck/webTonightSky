@@ -607,7 +607,7 @@ def list_objects():
                     'Alt Name': row.get('Alt Name', ''),
                     'Type': row['Type'],
                     'Magnitude': row['Magnitude'],
-                    'Size': ' ',
+                    'Size': row['Size'],
                     'Info': row['Info'],
                     'Catalog': row['Catalog']
                 }
