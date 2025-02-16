@@ -37,7 +37,7 @@ from pyparsing import (
 #   GLOBALS
 #
 # Constants
-VERSION = "4.0"
+VERSION = "4.3"
 #############################
 # Set up logging
 # Ensure the log directory exists
@@ -134,13 +134,16 @@ def log_request_info():
     )
 
 def load_catalog():
+    """Load the celestial catalog from CSV into memory."""
     global catalog_table
     try:
+        logger.info("Loading catalog...")
         catalog_table = Table.read(csv_filename, format='csv')
         catalog_table = catalog_table.filled("")
-        logger.info("Catalog loaded successfully with %d entries.", len(catalog_table))
+        logger.info(f"Catalog loaded successfully with {len(catalog_table)} entries.")
     except Exception as e:
         logger.error(f"Failed to load catalog: {e}")
+
 
 # Initialize resources before the app starts handling requests
 with app.app_context():
@@ -644,4 +647,15 @@ def list_objects():
         logger.error(f"Unexpected error: {e}")
         return jsonify({"error": "An unexpected error occurred."}), 500
 
+
+@app.route('/api/reload_catalog', methods=['GET', 'POST'])
+def reload_catalog():
+    """Endpoint to reload the celestial catalog from the CSV file."""
+    try:
+        load_catalog()  # Reload the catalog from disk
+        return jsonify({"status": "success", "message": "Catalog reloaded successfully"}), 200
+    except Exception as e:
+        logger.error(f"Error reloading catalog: {e}")
+        return jsonify({"status": "error", "message": "Failed to reload catalog"}), 500
+    
    
