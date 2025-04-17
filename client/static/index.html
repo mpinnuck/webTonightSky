@@ -540,9 +540,17 @@
         function addRowEventListeners(row, obj) {
             // Add double-click event to open Astrobin link
             row.addEventListener('dblclick', () => {
-                const objectName = obj.Name.replace(/\s+/g, '');
-                const astrobinUrl = `https://www.astrobin.com/search/?q=${encodeURIComponent(objectName)}`;
-                window.open(astrobinUrl, '_blank');
+                const name = obj.Name.replace(/\s+/g, '').toLowerCase(); // Remove spaces and lowercase, e.g., "M 83" → "m83"
+                const match = name.match(/([a-z]+)(\d+)/); // Match prefix (letters) and number (digits)
+                if (match) {
+                    const prefix = match[1];
+                    const number = match[2];
+                    const formattedName = `${prefix}-${number}`; // e.g., "m-83"
+                    const telescopiusUrl = `https://telescopius.com/deep-sky-objects/${formattedName}`;
+                    window.open(telescopiusUrl, '_blank');
+                } else {
+                    console.error('Object name does not match expected pattern:', obj.Name);
+                }
             });
 
             // Add context menu event to show the custom context menu
