@@ -11,6 +11,7 @@ from astropy.time import Time
 import astropy.units as u
 from astropy.table import Table
 from astroplan import Observer, FixedTarget
+from numpy.ma.core import MaskedConstant 
 import json
 import time
 import os
@@ -138,12 +139,30 @@ def load_catalog():
     global catalog_table
     try:
         logger.info("Loading catalog...")
-        catalog_table = Table.read(csv_filename, format='csv')
-        catalog_table = catalog_table.filled("")
+        # Handle empty cells and common placeholders during parsing
+        catalog_table = Table.read(
+            csv_filename,
+            format='csv',
+            fill_values=[('', ''), ('--', '')]  # Map empty cells and '--' to ''
+        )
+        # Set fill values based on column type
+        for col in catalog_table.colnames:
+            if catalog_table[col].dtype.kind in ('f', 'i'):  # Numeric columns
+                catalog_table[col].fill_value = None
+            else:  # String columns
+                catalog_table[col].fill_value = ''
+        catalog_table = catalog_table.filled()
+        # Log any remaining masked values
+        for col in catalog_table.colnames:
+            if catalog_table[col].mask is not None and any(catalog_table[col].mask):
+                masked_indices = [i for i, m in enumerate(catalog_table[col].mask) if m]
+                logger.warning(
+                    f"Found {len(masked_indices)} masked values in column '{col}' "
+                    f"at rows (0-based): {masked_indices[:5]}"
+                )
         logger.info(f"Catalog loaded successfully with {len(catalog_table)} entries.")
     except Exception as e:
         logger.error(f"Failed to load catalog: {e}")
-
 
 # Initialize resources before the app starts handling requests
 with app.app_context():
@@ -594,7 +613,6 @@ def list_objects():
 
                 transit_alt = calc_transit_altitude(ra, dec, latitude, longitude)
 
-
                 # Build the row object
                 current_row = {
                     'Name': row['Name'],
@@ -615,6 +633,14 @@ def list_objects():
                     'Catalog': row['Catalog']
                 }
 
+                # Check for MaskedConstant values and log the row if found
+                for key, value in current_row.items():
+                    if isinstance(value, MaskedConstant):
+                        logger.error(
+                            f"Found MaskedConstant in row {row_count}: "
+                            f"Column='{key}', Value={value}, Row={dict(row)}"
+                        )
+
                 # Evaluate the row against conditions
                 if not evaluate_conditions(current_row, conditions):
                     continue
@@ -624,7 +650,20 @@ def list_objects():
                 current_row['Azimuth'] +=  '°'
                 # Stream the matching object as a JSON object
                 included_count += 1
-                yield json.dumps(current_row) + "\n"
+#                yield json.dumps(current_row) + "\n"
+                              # Try to serialize the row, catch errors
+                try:
+                    yield json.dumps(current_row) + "\n"
+                except TypeError as e:
+                    logger.error(
+                        f"JSON serialization failed at row {row_count}: {e}\n"
+                        f"Row data: {dict(row)}\n"
+                        f"Current row: {current_row}"
+                    )
+                    # Optional: Pause with debugger
+                    # import pdb; pdb.set_trace()
+                    continue  # Skip this row and continue processing
+
                 
             elapsed_time = time.perf_counter() - start_time
             logger.debug(f"Total rows processed: {row_count}")
