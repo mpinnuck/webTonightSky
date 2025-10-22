@@ -38,7 +38,7 @@ from pyparsing import (
 #   GLOBALS
 #
 # Constants
-VERSION = "4.5"
+VERSION = "4.6"
 #############################
 # Set up logging
 # Ensure the log directory exists
@@ -296,6 +296,8 @@ def calculate_lst():
         data = request.json
         longitude = float(data['longitude'])
         local_time_str = f"{data['date']} {data['local_time']}"
+        # Strip any seconds if the user supplied them
+        local_time_str = ':'.join(local_time_str.split(':')[:2])
         timezone = pytz.timezone(data['timezone'])
         local_time = timezone.localize(datetime.strptime(local_time_str, "%Y-%m-%d %H:%M"))
         # Check if the time is in AM and should be considered as the next day
@@ -560,6 +562,8 @@ def list_objects():
         latitude = float(data['latitude'])
         longitude = float(data['longitude'])
         local_time_str = f"{data['date']} {data['local_time']}"
+        # Strip any seconds if the user supplied them
+        local_time_str = ':'.join(local_time_str.split(':')[:2])
         timezone = pytz.timezone(data['timezone'])
         local_time = timezone.localize(datetime.strptime(local_time_str, "%Y-%m-%d %H:%M"))
         # Check if the time is in AM and should be considered as the next day
