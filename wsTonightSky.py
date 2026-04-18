@@ -38,7 +38,7 @@ from pyparsing import (
 #   GLOBALS
 #
 # Constants
-VERSION = "4.6"
+VERSION = "4.7"
 #############################
 # Set up logging
 # Ensure the log directory exists
@@ -154,8 +154,9 @@ def load_catalog():
         catalog_table = catalog_table.filled()
         # Log any remaining masked values
         for col in catalog_table.colnames:
-            if catalog_table[col].mask is not None and any(catalog_table[col].mask):
-                masked_indices = [i for i, m in enumerate(catalog_table[col].mask) if m]
+            col_data = catalog_table[col]
+            if hasattr(col_data, 'mask') and col_data.mask is not None and any(col_data.mask):
+                masked_indices = [i for i, m in enumerate(col_data.mask) if m]
                 logger.warning(
                     f"Found {len(masked_indices)} masked values in column '{col}' "
                     f"at rows (0-based): {masked_indices[:5]}"
