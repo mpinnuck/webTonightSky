@@ -113,6 +113,25 @@
                 }
             });
 
+            // Handle window focus - clear list only if date is not today
+            window.addEventListener('focus', () => {
+                const dateInput = document.getElementById('date');
+                if (dateInput) {
+                    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                    const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+                    const currentDate = dateInput.value;
+                    
+                    // Only clear the list if the current date is not today
+                    if (currentDate && currentDate !== today) {
+                        const tableBody = document.getElementById('resultsTableBody');
+                        if (tableBody) {
+                            tableBody.innerHTML = ""; // Clear the list
+                            updateObjectCount(); // Update the object count display
+                        }
+                    }
+                }
+            });
+
             // Fetch version from server
             fetch(`${APP_SERVER}version`)
                 .then(async response => {
