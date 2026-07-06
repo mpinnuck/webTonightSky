@@ -13,7 +13,7 @@ import os
 # Allow running as `python test/test.py` from the project root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from core.config import valid_columns
+from core.catalog import valid_columns
 from core.query_language import parse_query_conditions, evaluate_conditions
 from pyparsing import ParseException
 

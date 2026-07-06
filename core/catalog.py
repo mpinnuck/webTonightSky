@@ -7,6 +7,29 @@ from astropy.table import Table
 
 from core.config import CSV_FILENAME, logger
 
+# Mapping from CSV headers to table headers with formatting info.
+table_headers = {
+    "Name": {"name": "Name", "type": "string"},
+    "RA": {"name": "RA", "type": "time"},
+    "Dec": {"name": "Dec", "type": "string"},
+    "Transit Time": {"name": "Transit Time", "type": "time"},
+    "Transit Alt": {"name": "Transit Alt", "type": "float"},
+    "Direction": {"name": "Direction", "type": "string"},
+    "Relative TT": {"name": "Relative TT", "type": "time"},
+    "Before/After": {"name": "Before/After", "type": "string"},
+    "Altitude": {"name": "Altitude", "type": "float"},
+    "Azimuth": {"name": "Azimuth", "type": "float"},
+    "Alt Name": {"name": "Alt Name", "type": "string"},
+    "Type": {"name": "Type", "type": "string"},
+    "Magnitude": {"name": "Magnitude", "type": "float"},
+    "Size": {"name": "Size", "type": "float"},
+    "Info": {"name": "Info", "type": "string"},
+    "Catalog": {"name": "Catalog", "type": "string"},
+}
+
+# Lower-cased lookup used by the query language / filters.
+valid_columns = {header.lower(): info for header, info in table_headers.items()}
+
 
 class CatalogStore:
     """

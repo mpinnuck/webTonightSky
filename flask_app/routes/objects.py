@@ -6,8 +6,8 @@ import pytz
 from flask import Blueprint, Response, jsonify, request, stream_with_context
 from numpy.ma.core import MaskedConstant
 
-from core.config import logger, valid_columns
-from core.catalog import CatalogStore
+from core.config import logger
+from core.catalog import CatalogStore, valid_columns
 from core.astro_calc import (
     calc_time_location_and_lst,
     calc_transit_and_alt_az,
