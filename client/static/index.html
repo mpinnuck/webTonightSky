@@ -99,7 +99,11 @@
             timeField.addEventListener('input', updateLST);
             document.getElementById('latitude').addEventListener('input', saveSettings);
             document.getElementById('longitude').addEventListener('input', saveSettings);
-            document.getElementById('timezone').addEventListener('input', saveSettings);
+            document.getElementById('timezone').addEventListener('input', () => {
+                saveSettings();
+                updateLST();
+            });
+            document.getElementById('timezone').addEventListener('change', updateLST);
             document.getElementById('local_time').addEventListener('input', saveSettings);
             document.getElementById('filter_expression').addEventListener('input', saveSettings);
             document.querySelectorAll('input[name="catalogs"]').forEach(cb => {
@@ -183,15 +187,22 @@
                     timezoneSelect.appendChild(option);
                 });
 
-                // Restore saved timezone from settings
-                const savedTimezone = localStorage.getItem('timezone');
-                if (savedTimezone) {
-                    timezoneInput.value = savedTimezone;
+                // Restore saved timezone and fall back to browser timezone for first-time visitors.
+                const settings = JSON.parse(localStorage.getItem('tonightSkySettings') || '{}');
+                const savedTimezone = settings.timezone || localStorage.getItem('timezone');
+                const resolvedTimezone = savedTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+                if (resolvedTimezone) {
+                    timezoneInput.value = resolvedTimezone;
 
                     const matchingOption = Array.from(timezoneSelect.options).find(
-                        option => option.value === savedTimezone
+                        option => option.value === resolvedTimezone
                     );
                     if (matchingOption) matchingOption.selected = true;
+
+                    // Persist the resolved timezone in settings so subsequent loads are consistent.
+                    saveSettings();
+                    updateLST();
                 }
 
                 // Filter dropdown options based on input
@@ -234,6 +245,7 @@
                         timezoneInput.value = selectedOption.value;
                         timezoneSelect.style.display = 'none';
                         saveSettings(); // Optional: Save the selection
+                        updateLST();
                     }
                 });
 
@@ -245,6 +257,7 @@
                             timezoneInput.value = selectedOption.value;
                             timezoneSelect.style.display = 'none';
                             saveSettings(); // Optional: Save the selection
+                            updateLST();
                         }
                     });
 
@@ -252,6 +265,7 @@
                         timezoneInput.value = event.target.value;
                         timezoneSelect.style.display = 'none';
                         saveSettings();
+                        updateLST();
                     });
 
                     timezoneSelect.addEventListener('focusout', (event) => {
@@ -271,6 +285,7 @@
                         setTimeout(() => {
                             if (!isDropdownFocused) {
                                 timezoneSelect.style.display = 'none';
+                                updateLST();
                             }
                         }, 150);
                     });
