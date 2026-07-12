@@ -25,8 +25,8 @@
     <script>
         // constants
         const ENABLE_LOGGING = false;
-    //    const APP_SERVER = 'http://127.0.0.1:5000/api/';
-        const APP_SERVER = 'https://app.microconcepts.com.au/tonightsky/api/';
+        const APP_SERVER = 'http://127.0.0.1:5000/api/';
+    //    const APP_SERVER = 'https://app.microconcepts.com.au/tonightsky/api/';
 
         const HORIZON_ALTITUDE = 25; // Constant for the horizontal line altitude
         // Define constants for gradient start and end colors
@@ -108,6 +108,46 @@
             document.getElementById('filter_expression').addEventListener('input', saveSettings);
             document.querySelectorAll('input[name="catalogs"]').forEach(cb => {
                 cb.addEventListener('change', saveSettings);
+            });
+
+            // Equipment profiles: populate the selector, then wire up its controls
+            populateEquipmentProfileSelect();
+            document.getElementById('equipmentProfileSelect').addEventListener('change', saveSettings);
+            document.getElementById('manageProfilesButton').addEventListener('click', openProfilesModal);
+            document.getElementById('exportProfilesButton').addEventListener('click', exportEquipmentProfiles);
+            document.getElementById('importProfilesButton').addEventListener('click', () => {
+                document.getElementById('importProfilesInput').click();
+            });
+            document.getElementById('importProfilesInput').addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) importEquipmentProfilesFromFile(file);
+                event.target.value = ''; // allow re-importing the same file later
+            });
+            ['profileFocalLength', 'profileSensorWidth', 'profileSensorHeight'].forEach(id => {
+                const field = document.getElementById(id);
+                if (field) field.addEventListener('input', updateProfileFovLabel);
+            });
+            document.getElementById('tonightsBestButton').addEventListener('click', () => listObjects(true));
+
+            // Horizon profiles
+            populateHorizonProfileSelect();
+            document.getElementById('horizonProfileSelect').addEventListener('change', saveSettings);
+            document.getElementById('manageHorizonProfilesButton').addEventListener('click', openHorizonProfilesModal);
+            document.getElementById('importHorizonFilesButton').addEventListener('click', () => {
+                document.getElementById('importHorizonFilesInput').click();
+            });
+            document.getElementById('importHorizonFilesInput').addEventListener('change', (event) => {
+                if (event.target.files.length > 0) importHrzFiles(event.target.files);
+                event.target.value = '';
+            });
+            document.getElementById('exportHorizonProfilesButton').addEventListener('click', exportHorizonProfiles);
+            document.getElementById('importHorizonProfilesJsonButton').addEventListener('click', () => {
+                document.getElementById('importHorizonProfilesJsonInput').click();
+            });
+            document.getElementById('importHorizonProfilesJsonInput').addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) importHorizonProfilesFromJsonFile(file);
+                event.target.value = '';
             });
 
             // Close the context menu on click outside
@@ -478,7 +518,7 @@
             document.getElementById('objectCount').textContent = `Object Count: ${rowCount}`;
         }
 
-        async function listObjects() {
+        async function listObjects(tonightsBest = false) {
             const latitude = document.getElementById('latitude').value;
             const longitude = document.getElementById('longitude').value;
             const date = document.getElementById('date').value;
@@ -490,9 +530,34 @@
                 catalogs[cb.value] = cb.checked;
             });
 
+            const requestBody = { latitude, longitude, date, local_time, timezone, filter_expression, catalogs };
+
+            if (tonightsBest) {
+                const profile = getSelectedEquipmentProfile();
+                if (!profile) {
+                    document.getElementById("errorMessage").textContent =
+                        "Select (or create) an equipment profile before running Tonight's Best.";
+                    document.getElementById("errorMessage").style.display = "inline-block";
+                    return;
+                }
+                requestBody.tonights_best = true;
+                requestBody.equipment = {
+                    focal_length_mm: profile.focal_length_mm,
+                    aperture_mm: profile.aperture_mm,
+                    sensor_width_mm: profile.sensor_width_mm,
+                    sensor_height_mm: profile.sensor_height_mm
+                };
+
+                const horizonProfile = getSelectedHorizonProfile();
+                if (horizonProfile) {
+                    requestBody.horizon_points = horizonProfile.points;
+                }
+            }
+
             const tableBody = document.getElementById('resultsTableBody');
             tableBody.innerHTML = ""; // Clear previous results
             const cachedObjects = []; // Collect results for caching
+            const objectCount = document.getElementById('objectCount');
 
             const loadingPopup = document.getElementById('loadingPopup');
             loadingPopup.style.display = 'block';
@@ -501,7 +566,7 @@
                 const response = await fetch(`${APP_SERVER}list_objects`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ latitude, longitude, date, local_time, timezone, filter_expression, catalogs })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (await errorHandler(response, 'Failed to fetch data')) return;
@@ -589,6 +654,8 @@
                 <td>${obj["Size"]}</td>
                 <td>${obj.Info}</td>
                 <td>${obj.Catalog}</td>
+                <td>${obj.Score !== undefined ? obj.Score : ''}</td>
+                <td>${obj["Shooting Time"] !== undefined ? obj["Shooting Time"] : ''}</td>
             `;
             return row;
         }
@@ -717,7 +784,9 @@
                     acc[cb.value] = cb.checked;
                     return acc;
                 }, {}),
-                filter_query: document.getElementById('filter_expression').value
+                filter_query: document.getElementById('filter_expression').value,
+                equipment_profile: document.getElementById('equipmentProfileSelect') ? document.getElementById('equipmentProfileSelect').value : '',
+                horizon_profile: document.getElementById('horizonProfileSelect') ? document.getElementById('horizonProfileSelect').value : ''
             };
             localStorage.setItem('tonightSkySettings', JSON.stringify(settings));
         }
@@ -735,7 +804,459 @@
                 document.querySelectorAll('input[name="catalogs"]').forEach(cb => {
                     cb.checked = !!catalogFilters[cb.value];
                 });
+
+                if (settings.equipment_profile) {
+                    const select = document.getElementById('equipmentProfileSelect');
+                    if (select) select.dataset.pendingSelection = settings.equipment_profile;
+                }
+                if (settings.horizon_profile) {
+                    const horizonSelect = document.getElementById('horizonProfileSelect');
+                    if (horizonSelect) horizonSelect.dataset.pendingSelection = settings.horizon_profile;
+                }
             }
+        }
+
+        /////////////////////////////////////////////////////////////////////////////////
+        //
+        //  Equipment Profiles (stored in this browser's localStorage only - see the
+        //  note in the Profiles modal for moving them between devices via export/import)
+        //
+        const EQUIPMENT_PROFILES_KEY = 'tonightSkyEquipmentProfiles';
+
+        function loadEquipmentProfiles() {
+            try {
+                return JSON.parse(localStorage.getItem(EQUIPMENT_PROFILES_KEY)) || [];
+            } catch (e) {
+                console.error('Error reading equipment profiles from localStorage:', e);
+                return [];
+            }
+        }
+
+        function saveEquipmentProfiles(profiles) {
+            localStorage.setItem(EQUIPMENT_PROFILES_KEY, JSON.stringify(profiles));
+        }
+
+        function getSelectedEquipmentProfile() {
+            const select = document.getElementById('equipmentProfileSelect');
+            if (!select || !select.value) return null;
+            return loadEquipmentProfiles().find(p => p.name === select.value) || null;
+        }
+
+        function populateEquipmentProfileSelect() {
+            const select = document.getElementById('equipmentProfileSelect');
+            if (!select) return;
+            const previousValue = select.dataset.pendingSelection || select.value;
+            select.innerHTML = '';
+
+            const profiles = loadEquipmentProfiles();
+            if (profiles.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No profiles saved';
+                select.appendChild(option);
+                return;
+            }
+
+            profiles.forEach(profile => {
+                const option = document.createElement('option');
+                option.value = profile.name;
+                option.textContent = profile.name;
+                select.appendChild(option);
+            });
+
+            if (previousValue && profiles.some(p => p.name === previousValue)) {
+                select.value = previousValue;
+            }
+            delete select.dataset.pendingSelection;
+        }
+
+        function renderProfilesTable() {
+            const tableBody = document.getElementById('profilesTableBody');
+            tableBody.innerHTML = '';
+            const profiles = loadEquipmentProfiles();
+
+            profiles.forEach(profile => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${profile.name}</td>
+                    <td>${profile.focal_length_mm}</td>
+                    <td>${profile.aperture_mm}</td>
+                    <td>${profile.sensor_width_mm} x ${profile.sensor_height_mm}</td>
+                    <td>${formatProfileFovDegrees(profile)}</td>
+                    <td></td>
+                `;
+                const actionsCell = row.lastElementChild;
+
+                const editButton = document.createElement('button');
+                editButton.type = 'button';
+                editButton.textContent = 'Edit';
+                editButton.style.marginRight = '6px';
+                editButton.onclick = () => loadProfileIntoForm(profile.name);
+                actionsCell.appendChild(editButton);
+
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.textContent = 'Delete';
+                deleteButton.onclick = () => deleteEquipmentProfile(profile.name);
+                actionsCell.appendChild(deleteButton);
+
+                tableBody.appendChild(row);
+            });
+        }
+
+        function loadProfileIntoForm(name) {
+            const profile = loadEquipmentProfiles().find(p => p.name === name);
+            if (!profile) return;
+            document.getElementById('profileOriginalName').value = profile.name;
+            document.getElementById('profileName').value = profile.name;
+            document.getElementById('profileFocalLength').value = profile.focal_length_mm;
+            document.getElementById('profileAperture').value = profile.aperture_mm;
+            document.getElementById('profileSensorWidth').value = profile.sensor_width_mm;
+            document.getElementById('profileSensorHeight').value = profile.sensor_height_mm;
+            updateProfileFovLabel();
+        }
+
+        function resetProfileForm() {
+            document.getElementById('profileForm').reset();
+            document.getElementById('profileOriginalName').value = '';
+            document.getElementById('profileFormError').style.display = 'none';
+            updateProfileFovLabel();
+        }
+
+        function updateProfileFovLabel() {
+            const label = document.getElementById('profileFovLabel');
+            if (!label) return;
+
+            const focalLength = parseFloat(document.getElementById('profileFocalLength').value);
+            const sensorWidth = parseFloat(document.getElementById('profileSensorWidth').value);
+            const sensorHeight = parseFloat(document.getElementById('profileSensorHeight').value);
+
+            if ([focalLength, sensorWidth, sensorHeight].some(v => isNaN(v) || v <= 0)) {
+                label.textContent = 'Field of View: -';
+                return;
+            }
+
+            // Exact small-angle camera FoV in degrees for each sensor axis.
+            const widthDeg = 2 * Math.atan(sensorWidth / (2 * focalLength)) * (180 / Math.PI);
+            const heightDeg = 2 * Math.atan(sensorHeight / (2 * focalLength)) * (180 / Math.PI);
+            label.textContent = `Field of View: ${widthDeg.toFixed(1)}° x ${heightDeg.toFixed(1)}°`;
+        }
+
+        function formatProfileFovDegrees(profile) {
+            const focalLength = parseFloat(profile.focal_length_mm);
+            const sensorWidth = parseFloat(profile.sensor_width_mm);
+            const sensorHeight = parseFloat(profile.sensor_height_mm);
+            if ([focalLength, sensorWidth, sensorHeight].some(v => isNaN(v) || v <= 0)) {
+                return '-';
+            }
+            const widthDeg = 2 * Math.atan(sensorWidth / (2 * focalLength)) * (180 / Math.PI);
+            const heightDeg = 2 * Math.atan(sensorHeight / (2 * focalLength)) * (180 / Math.PI);
+            return `${widthDeg.toFixed(1)}° x ${heightDeg.toFixed(1)}°`;
+        }
+
+        function saveProfileFromForm() {
+            const errorSpan = document.getElementById('profileFormError');
+            errorSpan.style.display = 'none';
+
+            const originalName = document.getElementById('profileOriginalName').value;
+            const name = document.getElementById('profileName').value.trim();
+            const focal_length_mm = parseFloat(document.getElementById('profileFocalLength').value);
+            const aperture_mm = parseFloat(document.getElementById('profileAperture').value);
+            const sensor_width_mm = parseFloat(document.getElementById('profileSensorWidth').value);
+            const sensor_height_mm = parseFloat(document.getElementById('profileSensorHeight').value);
+
+            if (!name) {
+                errorSpan.textContent = 'Profile name is required.';
+                errorSpan.style.display = 'inline-block';
+                return;
+            }
+            if ([focal_length_mm, aperture_mm, sensor_width_mm, sensor_height_mm].some(v => isNaN(v) || v <= 0)) {
+                errorSpan.textContent = 'Focal length, aperture, and sensor width/height must all be positive numbers.';
+                errorSpan.style.display = 'inline-block';
+                return;
+            }
+
+            let profiles = loadEquipmentProfiles();
+
+            // Renaming: drop the old entry once the new one is validated.
+            if (originalName && originalName !== name) {
+                profiles = profiles.filter(p => p.name !== originalName);
+            }
+            // Block collisions with a different existing profile of the same name.
+            if (profiles.some(p => p.name === name) && name !== originalName) {
+                errorSpan.textContent = `A profile named "${name}" already exists.`;
+                errorSpan.style.display = 'inline-block';
+                return;
+            }
+
+            const newProfile = { name, focal_length_mm, aperture_mm, sensor_width_mm, sensor_height_mm };
+            profiles = profiles.filter(p => p.name !== name);
+            profiles.push(newProfile);
+            profiles.sort((a, b) => a.name.localeCompare(b.name));
+
+            saveEquipmentProfiles(profiles);
+            renderProfilesTable();
+            populateEquipmentProfileSelect();
+            document.getElementById('equipmentProfileSelect').value = name;
+            saveSettings();
+            resetProfileForm();
+        }
+
+        function deleteEquipmentProfile(name) {
+            if (!confirm(`Delete profile "${name}"?`)) return;
+            const profiles = loadEquipmentProfiles().filter(p => p.name !== name);
+            saveEquipmentProfiles(profiles);
+            renderProfilesTable();
+            populateEquipmentProfileSelect();
+            saveSettings();
+        }
+
+        function exportEquipmentProfiles() {
+            const profiles = loadEquipmentProfiles();
+            const blob = new Blob([JSON.stringify(profiles, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'tonightsky_equipment_profiles.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importEquipmentProfilesFromFile(file) {
+            const reader = new FileReader();
+            reader.onload = () => {
+                let imported;
+                try {
+                    imported = JSON.parse(reader.result);
+                    if (!Array.isArray(imported)) throw new Error('Expected a JSON array of profiles');
+                } catch (e) {
+                    alert(`Could not import profiles: ${e.message}`);
+                    return;
+                }
+
+                const existing = loadEquipmentProfiles();
+                const merged = new Map(existing.map(p => [p.name, p]));
+                let importedCount = 0;
+                imported.forEach(entry => {
+                    if (entry && entry.name && entry.focal_length_mm && entry.aperture_mm
+                        && entry.sensor_width_mm && entry.sensor_height_mm) {
+                        merged.set(entry.name, entry);
+                        importedCount++;
+                    }
+                });
+
+                const mergedList = Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
+                saveEquipmentProfiles(mergedList);
+                renderProfilesTable();
+                populateEquipmentProfileSelect();
+                alert(`Imported ${importedCount} profile(s). Existing profiles with the same name were overwritten.`);
+            };
+            reader.readAsText(file);
+        }
+
+        function openProfilesModal() {
+            renderProfilesTable();
+            resetProfileForm();
+            document.getElementById('profilesModal').style.display = 'block';
+        }
+
+        function closeProfilesModal() {
+            document.getElementById('profilesModal').style.display = 'none';
+        }
+
+        /////////////////////////////////////////////////////////////////////////////////
+        //
+        //  Horizon Profiles (stored in this browser's localStorage only, same pattern
+        //  as Equipment Profiles - imported from .hrz landscape files)
+        //
+        const HORIZON_PROFILES_KEY = 'tonightSkyHorizonProfiles';
+
+        function loadHorizonProfiles() {
+            try {
+                return JSON.parse(localStorage.getItem(HORIZON_PROFILES_KEY)) || [];
+            } catch (e) {
+                console.error('Error reading horizon profiles from localStorage:', e);
+                return [];
+            }
+        }
+
+        function saveHorizonProfiles(profiles) {
+            localStorage.setItem(HORIZON_PROFILES_KEY, JSON.stringify(profiles));
+        }
+
+        function getSelectedHorizonProfile() {
+            const select = document.getElementById('horizonProfileSelect');
+            if (!select || !select.value) return null; // "No horizon (flat default)"
+            return loadHorizonProfiles().find(p => p.name === select.value) || null;
+        }
+
+        function populateHorizonProfileSelect() {
+            const select = document.getElementById('horizonProfileSelect');
+            if (!select) return;
+            const previousValue = select.dataset.pendingSelection || select.value;
+            select.innerHTML = '';
+
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'No horizon (flat default)';
+            select.appendChild(defaultOption);
+
+            loadHorizonProfiles().forEach(profile => {
+                const option = document.createElement('option');
+                option.value = profile.name;
+                option.textContent = `${profile.name} (${profile.points.length} pts)`;
+                select.appendChild(option);
+            });
+
+            if (previousValue && loadHorizonProfiles().some(p => p.name === previousValue)) {
+                select.value = previousValue;
+            }
+            delete select.dataset.pendingSelection;
+        }
+
+        function renderHorizonProfilesTable() {
+            const tableBody = document.getElementById('horizonProfilesTableBody');
+            tableBody.innerHTML = '';
+            const profiles = loadHorizonProfiles();
+
+            profiles.forEach(profile => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${profile.name}</td>
+                    <td>${profile.points.length}</td>
+                    <td></td>
+                `;
+                const actionsCell = row.lastElementChild;
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.textContent = 'Delete';
+                deleteButton.onclick = () => deleteHorizonProfile(profile.name);
+                actionsCell.appendChild(deleteButton);
+                tableBody.appendChild(row);
+            });
+        }
+
+        function deleteHorizonProfile(name) {
+            if (!confirm(`Delete horizon profile "${name}"?`)) return;
+            const profiles = loadHorizonProfiles().filter(p => p.name !== name);
+            saveHorizonProfiles(profiles);
+            renderHorizonProfilesTable();
+            populateHorizonProfileSelect();
+            saveSettings();
+        }
+
+        // Parses Stellarium-style .hrz landscape text into [[az, alt], ...] pairs.
+        // Mirrors core.horizon.HorizonProfile.from_hrz_text on the server.
+        function parseHrzText(text) {
+            const points = [];
+            const lines = text.split(/\r\n|\r|\n/);
+            for (const rawLine of lines) {
+                const line = rawLine.trim();
+                if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+                const parts = line.split(/\s+/);
+                if (parts.length < 2) continue; // e.g. a lone point-count header line
+                const az = parseFloat(parts[0]);
+                const alt = parseFloat(parts[1]);
+                if (isNaN(az) || isNaN(alt)) continue;
+                points.push([az, alt]);
+            }
+            return points;
+        }
+
+        function importHrzFiles(fileList) {
+            const errorSpan = document.getElementById('horizonProfileFormError');
+            errorSpan.style.display = 'none';
+
+            const files = Array.from(fileList);
+            if (files.length === 0) return;
+
+            let remaining = files.length;
+            let imported = 0;
+            const skippedNames = [];
+
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const points = parseHrzText(reader.result);
+                    const name = file.name.replace(/\.[^/.]+$/, ''); // strip extension
+                    if (points.length === 0) {
+                        skippedNames.push(file.name);
+                    } else {
+                        const profiles = loadHorizonProfiles().filter(p => p.name !== name);
+                        profiles.push({ name, points });
+                        profiles.sort((a, b) => a.name.localeCompare(b.name));
+                        saveHorizonProfiles(profiles);
+                        imported++;
+                    }
+
+                    remaining--;
+                    if (remaining === 0) {
+                        renderHorizonProfilesTable();
+                        populateHorizonProfileSelect();
+                        if (skippedNames.length > 0) {
+                            errorSpan.textContent = `Imported ${imported} file(s). Could not parse: ${skippedNames.join(', ')}`;
+                            errorSpan.style.display = 'inline-block';
+                        }
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        function exportHorizonProfiles() {
+            const profiles = loadHorizonProfiles();
+            const blob = new Blob([JSON.stringify(profiles, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'tonightsky_horizon_profiles.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importHorizonProfilesFromJsonFile(file) {
+            const reader = new FileReader();
+            reader.onload = () => {
+                let imported;
+                try {
+                    imported = JSON.parse(reader.result);
+                    if (!Array.isArray(imported)) throw new Error('Expected a JSON array of horizon profiles');
+                } catch (e) {
+                    alert(`Could not import horizon profiles: ${e.message}`);
+                    return;
+                }
+
+                const existing = loadHorizonProfiles();
+                const merged = new Map(existing.map(p => [p.name, p]));
+                let importedCount = 0;
+                imported.forEach(entry => {
+                    if (entry && entry.name && Array.isArray(entry.points) && entry.points.length > 0) {
+                        merged.set(entry.name, entry);
+                        importedCount++;
+                    }
+                });
+
+                const mergedList = Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
+                saveHorizonProfiles(mergedList);
+                renderHorizonProfilesTable();
+                populateHorizonProfileSelect();
+                alert(`Imported ${importedCount} horizon profile(s). Existing profiles with the same name were overwritten.`);
+            };
+            reader.readAsText(file);
+        }
+
+        function openHorizonProfilesModal() {
+            renderHorizonProfilesTable();
+            document.getElementById('horizonProfileFormError').style.display = 'none';
+            document.getElementById('horizonProfilesModal').style.display = 'block';
+        }
+
+        function closeHorizonProfilesModal() {
+            document.getElementById('horizonProfilesModal').style.display = 'none';
         }
 
         async function fetchAltitudeData(object) {
@@ -1126,6 +1647,25 @@
                 <label for="catalogAbell" aria-label="Toggle Abell Catalog"><input type="checkbox" name="catalogs" id="catalogAbell" value="Abell"> Abell</label>
                 <label for="catalogSharpless" aria-label="Toggle Sharpless Catalog"><input type="checkbox" name="catalogs" id="catalogSharpless" value="Sharpless"> Sharpless</label>
             </div>
+
+            <!-- Equipment Profile Row (used by Tonight's Best) -->
+            <div class="form-row">
+                <label class="dropdown-input" for="equipmentProfileSelect" aria-label="Select Equipment Profile">
+                    Equipment Profile:
+                    <select id="equipmentProfileSelect"></select>
+                </label>
+                <button type="button" id="manageProfilesButton" aria-label="Manage Equipment Profiles">Manage Profiles</button>
+            </div>
+
+            <!-- Horizon Profile Row (optional, used by Tonight's Best) -->
+            <div class="form-row">
+                <label class="dropdown-input" for="horizonProfileSelect" aria-label="Select Horizon Profile">
+                    Horizon Profile:
+                    <select id="horizonProfileSelect"></select>
+                </label>
+                <button type="button" id="manageHorizonProfilesButton" aria-label="Manage Horizon Profiles">Manage Horizon Profiles</button>
+            </div>
+
             
             <!-- Fourth Row: Filter Query -->
             <div class="form-row full-width">
@@ -1136,6 +1676,7 @@
             <!-- Button Row -->
             <div class="button-row">
                 <button type="submit" id="listObjectsButton" aria-label="List Celestial Objects">List Objects</button>
+                <button type="button" id="tonightsBestButton" aria-label="Rank Objects for Tonight's Best">Tonight's Best</button>
                 <span id="objectCount" class="object-count-label" aria-label="Current Object Count">Object Count: 0</span>
                 <span id="errorMessage" style="color: red; margin-left:10px; display:none;"></span>
             </div>
@@ -1165,6 +1706,8 @@
                         <th onclick="sortTableByColumn(13)">Size</th>
                         <th onclick="sortTableByColumn(14)">Info</th>
                         <th onclick="sortTableByColumn(15)">Catalog</th>
+                        <th onclick="sortTableByColumn(16)">Score</th>
+                        <th onclick="sortTableByColumn(17)">Shooting Time</th>
                     </tr>
                 </thead>
                 <tbody id="resultsTableBody">
@@ -1181,6 +1724,99 @@
             <span class="close" onclick="closeModal()">&times;</span>
             <h3 id="chartTitle" class="chart-title"></h3> <!-- Title outside the chart -->
             <canvas id="altitudeChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Equipment Profiles Modal -->
+    <div id="profilesModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeProfilesModal()">&times;</span>
+            <h3 class="chart-title">Equipment Profiles</h3>
+            <p style="font-size: 13px; color: #555;">
+                Profiles are stored only in this browser. Use Export/Import to move them
+                to another device - e.g. export to a folder synced by iCloud, OneDrive,
+                or Google Drive, then import that file on your other device.
+            </p>
+
+            <table id="profilesTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Focal Length (mm)</th>
+                        <th>Aperture (mm)</th>
+                        <th>Sensor W x H (mm)</th>
+                        <th>FoV (deg)</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="profilesTableBody">
+                    <!-- Rows dynamically appended here -->
+                </tbody>
+            </table>
+
+            <form id="profileForm" onsubmit="event.preventDefault(); saveProfileFromForm();">
+                <input type="hidden" id="profileOriginalName" value="">
+                <div class="form-row">
+                    <label class="label-input" for="profileName">Name: <input type="text" id="profileName" placeholder="e.g. Q150P + ASI2600"></label>
+                    <label class="label-input" for="profileFocalLength">Focal Length (mm): <input type="text" id="profileFocalLength"></label>
+                    <label class="label-input" for="profileAperture">Aperture (mm): <input type="text" id="profileAperture"></label>
+                </div>
+                <div class="form-row">
+                    <label class="label-input" for="profileSensorWidth">Sensor Width (mm): <input type="text" id="profileSensorWidth"></label>
+                    <label class="label-input" for="profileSensorHeight">Sensor Height (mm): <input type="text" id="profileSensorHeight"></label>
+                    <span id="profileFovLabel" style="display:block; margin-top: 22px; color: #333;">-</span>
+                </div>
+                <div class="button-row">
+                    <button type="submit" id="saveProfileButton">Save Profile</button>
+                    <button type="button" id="cancelProfileEditButton" onclick="resetProfileForm()">Clear</button>
+                    <span id="profileFormError" style="color: red; display:none;"></span>
+                </div>
+            </form>
+
+            <div class="button-row">
+                <button type="button" id="exportProfilesButton">Export Profiles</button>
+                <button type="button" id="importProfilesButton">Import Profiles</button>
+                <input type="file" id="importProfilesInput" accept="application/json" style="display:none;">
+            </div>
+        </div>
+    </div>
+
+    <!-- Horizon Profiles Modal -->
+    <div id="horizonProfilesModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeHorizonProfilesModal()">&times;</span>
+            <h3 class="chart-title">Horizon Profiles</h3>
+            <p style="font-size: 13px; color: #555;">
+                Import one or more Stellarium-style .hrz landscape files (select multiple
+                at once to import a whole folder). Horizon profiles are stored only in
+                this browser - use Export/Import (JSON) the same way as Equipment Profiles
+                to move them to another device. Selecting "No horizon (flat default)" uses
+                a flat 25&deg; horizon on the server instead.
+            </p>
+
+            <table id="horizonProfilesTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Points</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="horizonProfilesTableBody">
+                    <!-- Rows dynamically appended here -->
+                </tbody>
+            </table>
+
+            <div class="button-row">
+                <button type="button" id="importHorizonFilesButton">Import .hrz File(s)</button>
+                <input type="file" id="importHorizonFilesInput" accept=".hrz,text/plain" multiple style="display:none;">
+            </div>
+            <div class="button-row">
+                <button type="button" id="exportHorizonProfilesButton">Export Profiles (JSON)</button>
+                <button type="button" id="importHorizonProfilesJsonButton">Import Profiles (JSON)</button>
+                <input type="file" id="importHorizonProfilesJsonInput" accept="application/json" style="display:none;">
+                <span id="horizonProfileFormError" style="color: red; display:none;"></span>
+            </div>
         </div>
     </div>
 

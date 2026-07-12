@@ -2,11 +2,15 @@ import json
 import time
 from datetime import datetime, timedelta
 
+import astropy.units as u
 import pytz
+from astropy.coordinates import EarthLocation
+from astropy.time import Time
+from astroplan import Observer
 from flask import Blueprint, Response, jsonify, request, stream_with_context
 from numpy.ma.core import MaskedConstant
 
-from core.config import logger
+from core.config import logger, HORIZON_FILENAME
 from core.catalog import CatalogStore, valid_columns
 from core.astro_calc import (
     calc_time_location_and_lst,
@@ -17,8 +21,68 @@ from core.astro_calc import (
     format_transit_time,
 )
 from core.query_language import parse_query_conditions, evaluate_conditions
+from core.equipment import EquipmentSettings
+from core.horizon import HorizonProfile
+from core.scoring import ScoringContext
 
 objects_bp = Blueprint("objects", __name__)
+
+
+def _resolve_equipment(data):
+    """
+    Resolve the equipment to use for Tonight's Best from the inline
+    "equipment" dict on the request. Equipment profiles themselves are
+    managed client-side (browser localStorage) since the server has no
+    concept of separate users - the browser sends whichever saved
+    profile is selected as this inline object.
+    """
+    equipment_data = data.get("equipment")
+    if not equipment_data:
+        raise ValueError("equipment settings are required for tonights_best")
+    return EquipmentSettings.from_request_dict(equipment_data)
+
+
+def _resolve_horizon(data):
+    """
+    Resolve the horizon profile to use for Tonight's Best. Like
+    equipment, horizon profiles (parsed from .hrz landscape files) are
+    managed client-side and sent inline as "horizon_points" - a list of
+    [azimuth_deg, altitude_deg] pairs - since a physical horizon is
+    tied to one person's observing site, not something the server can
+    assume for every visitor. Falls back to the server's default (a
+    real horizon.hrz if one's been deployed there, otherwise a flat
+    horizon) when no profile is selected client-side.
+    """
+    points = data.get("horizon_points")
+    if points:
+        try:
+            return HorizonProfile([(float(p[0]), float(p[1])) for p in points])
+        except (TypeError, ValueError, IndexError) as e:
+            raise ValueError(f"Invalid horizon_points: {e}")
+    return HorizonProfile.load(HORIZON_FILENAME)
+
+
+def _build_tonights_best_context(data, latitude, longitude, timezone):
+    """
+    Build the ScoringContext for a Tonight's Best request: resolves the
+    equipment settings and horizon profile from the request, and works
+    out tonight's astronomical-darkness window - the same twilight
+    convention already used by /api/altitude_data.
+    """
+    equipment = _resolve_equipment(data)
+    horizon = _resolve_horizon(data)
+
+    location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg, height=0 * u.m)
+    observer = Observer(location=location, timezone=timezone)
+
+    date_str = data["date"]
+    date = timezone.localize(datetime.strptime(date_str, "%Y-%m-%d"))
+    dusk = observer.twilight_evening_astronomical(Time(date), which="next").to_datetime(timezone)
+    dawn = observer.twilight_morning_astronomical(
+        Time(date + timedelta(days=1)), which="next"
+    ).to_datetime(timezone)
+
+    return ScoringContext(equipment=equipment, horizon=horizon, location=location, dusk=dusk, dawn=dawn)
 
 
 @objects_bp.route("/api/list_objects", methods=["POST"])
@@ -51,6 +115,7 @@ def list_objects():
 
         filter_expression = data.get("filter_expression", "")
         catalog_filters = data.get("catalogs", {})
+        tonights_best = bool(data.get("tonights_best", False))
 
         # Parse the filter expression into conditions
         try:
@@ -64,9 +129,22 @@ def list_objects():
 
         catalog_table = CatalogStore.instance().table
 
+        # Tonight's Best re-orders the eligible set by imaging suitability
+        # rather than filtering it, so build the scoring context up front
+        # (outside the generator) so a bad equipment payload or missing
+        # date surfaces as a normal 400/500 response.
+        scoring_context = None
+        if tonights_best:
+            try:
+                scoring_context = _build_tonights_best_context(data, latitude, longitude, timezone)
+            except ValueError as e:
+                logger.error(f"Tonight's Best setup error: {e}")
+                return jsonify({"error": f"Tonight's Best setup error: {e}"}), 400
+
         def generate():
             row_count = 0
             included_count = 0
+            best_rows = []  # only used when tonights_best is True
 
             astropy_time, location, altaz, lst = calc_time_location_and_lst(latitude, longitude, local_time)
 
@@ -129,6 +207,20 @@ def list_objects():
                 current_row["Azimuth"] += "°"
 
                 included_count += 1
+
+                if scoring_context is not None:
+                    try:
+                        breakdown = scoring_context.score_object(
+                            ra, dec, row["Magnitude"], row["Size"], row["Type"]
+                        )
+                    except Exception as e:
+                        logger.error(f"Scoring error for '{current_row['Name']}': {e}")
+                        continue
+                    current_row["Score"] = f"{breakdown.composite:.3f}"
+                    current_row["Shooting Time"] = format_transit_time(breakdown.run_minutes)
+                    best_rows.append((breakdown.composite, current_row))
+                    continue
+
                 try:
                     yield json.dumps(current_row) + "\n"
                 except TypeError as e:
@@ -138,6 +230,18 @@ def list_objects():
                         f"Current row: {current_row}"
                     )
                     continue
+
+            if scoring_context is not None:
+                best_rows.sort(key=lambda item: item[0], reverse=True)
+                for _, current_row in best_rows:
+                    try:
+                        yield json.dumps(current_row) + "\n"
+                    except TypeError as e:
+                        logger.error(
+                            f"JSON serialization failed for Tonight's Best row: {e}\n"
+                            f"Current row: {current_row}"
+                        )
+                        continue
 
             elapsed_time = time.perf_counter() - start_time
             logger.debug(f"Total rows processed: {row_count}")

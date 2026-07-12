@@ -8,8 +8,19 @@ from logging.handlers import RotatingFileHandler
 # -----------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------
-VERSION = "5.1"
+VERSION = "6.0"
 CSV_FILENAME = "./data/celestial_catalog.csv"
+# Single server-wide Stellarium .hrz polygonal horizon file, matching
+# the single-user deployment model already used for the catalog CSV.
+# If missing, core.horizon.HorizonProfile.load() falls back to a flat
+# 0 degree horizon so Tonight's Best keeps working without one.
+HORIZON_FILENAME = "./data/horizon.hrz"
+# Fallback minimum-useful altitude when no horizon.hrz is configured.
+# Matches HORIZON_ALTITUDE in client/static/index.html, the app's
+# existing "usable sky" threshold used by the altitude graph - keeping
+# Tonight's Best consistent with it until a real per-site obstruction
+# profile is deployed.
+DEFAULT_HORIZON_ALTITUDE_DEG = 25.0
 
 # -----------------------------------------------------------------
 # Logging
