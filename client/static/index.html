@@ -25,7 +25,16 @@
     <script>
         // constants
         const ENABLE_LOGGING = false;
-        const APP_SERVER = 'http://127.0.0.1:5000/api/';
+        const APP_SERVER = (() => {
+            const host = window.location.hostname;
+            const origin = window.location.origin;
+
+            if (host === 'localhost' || host === '127.0.0.1') {
+                return new URL('/api/', origin).href;
+            }
+
+            return new URL('api/', window.location.href).href;
+        })();
     //    const APP_SERVER = 'https://app.microconcepts.com.au/tonightsky/api/';
 
         const HORIZON_ALTITUDE = 25; // Constant for the horizontal line altitude
