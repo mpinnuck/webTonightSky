@@ -57,11 +57,13 @@ def altitude_data():
             times.append(current_time)
             current_time += timedelta(minutes=10)
 
-        # Calculate altitudes for each time point
+        # Calculate altitudes and azimuths for each time point
         altitudes = []
+        azimuths = []
         for t in times:
             altaz = observer.altaz(Time(t), target)
             altitudes.append(altaz.alt.deg)
+            azimuths.append(altaz.az.deg)
 
         # Calculate approximate transit time for the target
         transit_time = observer.target_meridian_transit_time(
@@ -71,6 +73,7 @@ def altitude_data():
         response_data = {
             "times": [t.strftime("%H:%M") for t in times],
             "altitudes": altitudes,
+            "azimuths": azimuths,
             "sunset": sunset.strftime("%H:%M:%S"),
             "sunrise": sunrise.strftime("%H:%M:%S"),
             "astronomical_dusk": astro_dusk.strftime("%H:%M:%S"),

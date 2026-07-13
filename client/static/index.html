@@ -1101,6 +1101,56 @@
             return loadHorizonProfiles().find(p => p.name === select.value) || null;
         }
 
+        function interpolateHorizonAltitude(points, azimuthDeg) {
+            if (!points || points.length === 0) {
+                return HORIZON_ALTITUDE;
+            }
+
+            const normalizedAzimuth = ((azimuthDeg % 360) + 360) % 360;
+            const sortedPoints = [...points]
+                .map(([azimuth, altitude]) => [((azimuth % 360) + 360) % 360, altitude])
+                .sort((a, b) => a[0] - b[0]);
+
+            if (sortedPoints.length === 1) {
+                return sortedPoints[0][1];
+            }
+
+            for (let index = 0; index < sortedPoints.length; index++) {
+                const [startAzimuth, startAltitude] = sortedPoints[index];
+                const [endAzimuth, endAltitude] = sortedPoints[(index + 1) % sortedPoints.length];
+                const span = (endAzimuth - startAzimuth + 360) % 360;
+
+                if (span === 0) {
+                    continue;
+                }
+
+                const offset = (normalizedAzimuth - startAzimuth + 360) % 360;
+                if (offset <= span) {
+                    const fraction = offset / span;
+                    return startAltitude + (endAltitude - startAltitude) * fraction;
+                }
+            }
+
+            return sortedPoints[0][1];
+        }
+
+        function buildHorizonSeries(horizonProfile, azimuths, sampleCount) {
+            const count = Array.isArray(azimuths) && azimuths.length > 0 ? azimuths.length : sampleCount;
+            if (!count || count <= 0) {
+                return [];
+            }
+
+            if (!horizonProfile) {
+                return Array.from({ length: count }, () => HORIZON_ALTITUDE);
+            }
+
+            if (!Array.isArray(azimuths) || azimuths.length === 0) {
+                return Array.from({ length: count }, () => HORIZON_ALTITUDE);
+            }
+
+            return azimuths.map(azimuth => interpolateHorizonAltitude(horizonProfile.points, azimuth));
+        }
+
         function populateHorizonProfileSelect() {
             const select = document.getElementById('horizonProfileSelect');
             if (!select) return;
@@ -1313,7 +1363,11 @@
             // Set the modal title dynamically
             const titleElement = document.getElementById('chartTitle');
             const maxAltitude = Math.max(...data.altitudes); // Calculate the max altitude
-            titleElement.textContent = `${object.Name.replace(/\s+/g, ' ').trim()} - Transit Time: ${object["Transit Time"]}- Apex: ${maxAltitude.toFixed(1)}°`;
+            const horizonProfile = getSelectedHorizonProfile();
+            const horizonLabel = horizonProfile ? ` - Horizon: ${horizonProfile.name}` : '';
+            titleElement.textContent = `${object.Name.replace(/\s+/g, ' ').trim()} - Transit Time: ${object["Transit Time"]}- Apex: ${maxAltitude.toFixed(1)}°${horizonLabel}`;
+
+            const horizonAltitudes = buildHorizonSeries(horizonProfile, data.azimuths || [], data.times.length);
 
             // Display the graph modal
             document.getElementById('graphModal').style.display = 'block';
@@ -1469,14 +1523,20 @@
                     // Define constants
                     const maxAltitude = scales.y.max; // Maximum value of the y-axis
 
-                    // Draw horizontal line at HORIZON_ALTITUDE if within the visible range
-                    if (HORIZON_ALTITUDE <= maxAltitude) {
-                        const yHorizon = scales.y.getPixelForValue(HORIZON_ALTITUDE);
+                    // Draw the selected horizon profile, or fall back to a flat horizon line
+                    if (horizonAltitudes.length > 0) {
                         ctx.beginPath();
-                        ctx.moveTo(chartArea.left, yHorizon);
-                        ctx.lineTo(chartArea.right, yHorizon);
-                        ctx.strokeStyle = 'blue';
-                        ctx.lineWidth = 2; // Thicker line
+                        horizonAltitudes.forEach((altitude, index) => {
+                            const xPosition = scales.x.getPixelForValue(index);
+                            const yPosition = scales.y.getPixelForValue(altitude);
+                            if (index === 0) {
+                                ctx.moveTo(xPosition, yPosition);
+                            } else {
+                                ctx.lineTo(xPosition, yPosition);
+                            }
+                        });
+                        ctx.strokeStyle = horizonProfile ? 'blue' : '#0080ff';
+                        ctx.lineWidth = 2;
                         ctx.stroke();
                     }
 
