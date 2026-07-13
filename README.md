@@ -18,6 +18,8 @@ Storage model: user settings and profile/config data are stored in the browser (
   - **Date and Local Time**: Enter the desired date and time for observations.
   - **Filter Query**: Perform SQL-like queries on the object list.
   - **Catalog Selection**: Choose catalogs (e.g., Messier, NGC, IC) for your object search.
+  - **Equipment Profiles**: Create, edit, import, export, and select imaging equipment profiles.
+  - **Horizon Profiles**: Create, edit, import, export, and select custom horizon profiles.
 
 - **Object List**:
   - View astronomical objects matching your criteria in a sortable table.
@@ -26,6 +28,7 @@ Storage model: user settings and profile/config data are stored in the browser (
 
 - **Altitude Graph**:
   - Visualize the altitude of an object over time.
+  - Plots the selected horizon profile on the graph when one is selected.
   - Key events such as sunset, sunrise, and transit are marked.
   - The visible period is highlighted in green.
 
@@ -62,10 +65,16 @@ Storage model: user settings and profile/config data are stored in the browser (
 ### **5. View Altitude Graph**
 - The graph shows:
   - **Transit Time**: The moment the object is at its highest altitude.
+  - **Selected Horizon Overlay**: If a horizon profile is selected, its horizon line is plotted on the chart.
   - **Visible Period**: Highlighted in green, indicating when the object is above the horizon.
   - **Sunset, Sunrise, and Other Events**: Marked with vertical lines.
 
-### **6. Use Tonight's Best**
+### **6. Manage Profiles**
+1. Use **Manage Profiles** to add, rename, delete, import, or export equipment profiles.
+2. Use **Manage Horizon Profiles** to add, rename, delete, import, or export horizon profiles.
+3. Select the active profile(s) from the profile dropdowns before listing objects or running ranking.
+
+### **7. Use Tonight's Best**
 1. Select or create an **Equipment Profile**.
 2. Optionally select a **Horizon Profile**.
 3. Set your normal filters (catalog checkboxes and filter query).
