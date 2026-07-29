@@ -62,9 +62,25 @@
         ////////
         logMessage(`Using API server: ${APP_SERVER}`);
 
+        function getIsoDateInTimeZone(timeZone) {
+            const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+
+            const parts = formatter.formatToParts(new Date());
+            const year = parts.find(part => part.type === 'year')?.value;
+            const month = parts.find(part => part.type === 'month')?.value;
+            const day = parts.find(part => part.type === 'day')?.value;
+
+            return `${year}-${month}-${day}`;
+        }
+
         function setTodayDate() {
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; // Get user's timezone
-            const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone }); // Format in ISO 8601 (yyyy-MM-dd)
+            const today = getIsoDateInTimeZone(timezone);
 
             const dateInput = document.getElementById('date'); // Target the date input field
             if (dateInput) {
@@ -171,7 +187,7 @@
                 const dateInput = document.getElementById('date');
                 if (dateInput) {
                     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                    const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+                    const today = getIsoDateInTimeZone(timezone);
                     const currentDate = dateInput.value;
                     
                     // Only clear the list if the current date is not today
