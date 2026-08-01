@@ -6,6 +6,8 @@ This module owns parsing a query string into a condition tree and
 evaluating that tree against a row of catalog data. No Flask or
 astronomy concerns live here.
 """
+import re
+
 import pyparsing as pp
 from pyparsing import (
     Word,
@@ -22,6 +24,19 @@ from pyparsing import (
 )
 
 from core.config import logger
+
+# Matches HH:MM or HH:MM:SS (hours unrestricted so e.g. "12:24:20" for a
+# Relative TT past 12 hours still parses).
+_TIME_RE = re.compile(r"^(\d{1,3}):([0-5]?\d)(?::([0-5]?\d))?$")
+
+
+def _parse_time_to_seconds(value):
+    """Parse an HH:MM[:SS] string into total seconds, or None if it doesn't match."""
+    match = _TIME_RE.match(str(value).strip())
+    if not match:
+        return None
+    hours, minutes, seconds = match.groups()
+    return int(hours) * 3600 + int(minutes) * 60 + int(seconds or 0)
 
 
 def parse_query_conditions(query, valid_columns):
@@ -140,10 +155,19 @@ def evaluate_condition(row, condition):
         try:
             float(v)
             return True
-        except ValueError:
+        except (ValueError, TypeError):
             return False
 
-    if is_numeric(row_value) and is_numeric(value):
+    # Time-like values (e.g. "03:29:45" vs "3:00") must never be compared
+    # as plain strings - lexicographic comparison is sensitive to leading
+    # zeros and silently gives wrong results (e.g. "03:29:45" < "3:00" is
+    # True as a string comparison, even though 3h29m is not less than 3h).
+    row_seconds = _parse_time_to_seconds(row_value)
+    value_seconds = _parse_time_to_seconds(value)
+
+    if row_seconds is not None and value_seconds is not None:
+        row_value, value = row_seconds, value_seconds
+    elif is_numeric(row_value) and is_numeric(value):
         row_value = float(row_value)
         value = float(value)
     else:

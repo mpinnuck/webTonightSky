@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>TonightSky v1.0</title>
     <link rel="stylesheet" href="./css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"> 
@@ -543,6 +544,24 @@
             document.getElementById('objectCount').textContent = `Object Count: ${rowCount}`;
         }
 
+        function buildResultSignature() {
+            // Captures the fields that determine what a cached result set
+            // actually represents, so a stale sessionStorage cache (e.g.
+            // from iOS Safari discarding/reloading a background tab) is
+            // never shown against a query it doesn't match.
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            const date = document.getElementById('date').value;
+            const local_time = document.getElementById('local_time').value;
+            const timezone = document.getElementById('timezone').value;
+            const filter_expression = document.getElementById('filter_expression').value;
+            const catalogs = {};
+            document.querySelectorAll('input[name="catalogs"]').forEach(cb => {
+                catalogs[cb.value] = cb.checked;
+            });
+            return JSON.stringify({ latitude, longitude, date, local_time, timezone, filter_expression, catalogs });
+        }
+
         async function listObjects(tonightsBest = false) {
             const latitude = document.getElementById('latitude').value;
             const longitude = document.getElementById('longitude').value;
@@ -629,8 +648,13 @@
                 // Final count update
                 objectCount.textContent = `Object Count: ${rowCount}`;
 
-                // Cache results in sessionStorage so they survive tab discard/reload
-                sessionStorage.setItem('cachedResults', JSON.stringify(cachedObjects));
+                // Cache results in sessionStorage so they survive tab discard/reload,
+                // tagged with the query that produced them so a stale cache is never
+                // shown against a filter/date/location it doesn't match.
+                sessionStorage.setItem('cachedResults', JSON.stringify({
+                    signature: buildResultSignature(),
+                    objects: cachedObjects
+                }));
 
             } catch (error) {
                 console.error("Error fetching data:", error);
@@ -646,7 +670,15 @@
             const tableBody = document.getElementById('resultsTableBody');
             if (tableBody.querySelectorAll('tr').length > 0) return; // Already populated
             try {
-                const objects = JSON.parse(cached);
+                const parsed = JSON.parse(cached);
+                // Cached results have no query context (older browser session,
+                // pre-fix, or the query was edited before the tab was
+                // discarded/reloaded) - discard rather than show stale data.
+                if (!parsed.signature || parsed.signature !== buildResultSignature()) {
+                    sessionStorage.removeItem('cachedResults');
+                    return;
+                }
+                const objects = parsed.objects || [];
                 objects.forEach(obj => appendRow(obj));
                 document.getElementById('objectCount').textContent = `Object Count: ${objects.length}`;
             } catch (e) {
