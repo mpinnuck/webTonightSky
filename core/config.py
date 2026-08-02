@@ -8,7 +8,7 @@ from logging.handlers import RotatingFileHandler
 # -----------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------
-VERSION = "6.4"
+VERSION = "6.5"
 CSV_FILENAME = "./data/celestial_catalog.csv"
 # Single server-wide Stellarium .hrz polygonal horizon file, matching
 # the single-user deployment model already used for the catalog CSV.

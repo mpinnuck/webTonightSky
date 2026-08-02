@@ -54,7 +54,7 @@ SIZE_UNKNOWN_SCORE = 0.05
 # reduce to 5 minutes at roughly 2x coordinate-transform cost.
 SAMPLE_INTERVAL_MINUTES = 10
 
-_SIZE_RE = re.compile(r"^\s*([\d.]+)\s*[xX]\s*([\d.]+)\s*$")
+_SIZE_RE = re.compile(r"^\s*([\d.]+)\s*[xX/]\s*([\d.]+)\s*$")
 
 ScoreBreakdown = namedtuple(
     "ScoreBreakdown",
@@ -73,8 +73,8 @@ ScoreBreakdown = namedtuple(
 def parse_size_arcmin(size_str):
     """
     Parse the catalog Size field into (major_axis, minor_axis) arcmin.
-    Accepts a single number ("12.9" -> circular, 12.9 x 12.9), a
-    "WxH" pair ("6.0x4.0" -> 6.0 x 4.0), or an empty/unparsable value
+    Accepts a single number ("12.9" -> 12.9 x 12.9), a
+    "WxH"/"W/H" pair ("6.0x4.0" or "0.3/2.2" -> 6.0 x 4.0), or an empty/unparsable value
     (returns None, meaning "unknown size").
     """
     if size_str is None:
@@ -123,11 +123,12 @@ def unknown_size_score(object_type):
 def score_size_fit(size_str, fov_width_arcmin, fov_height_arcmin, object_type=None):
     """
     Score how well the object fills the frame, 0-1. Peaks (1.0) when
-    the object's major axis fills between SIZE_FILL_LOW and
-    SIZE_FILL_HIGH of the frame's limiting (smaller) dimension, so the
-    fit assessment doesn't depend on framing orientation. Falls off on
-    both sides; scores 0 if the object can't fit inside the frame at
-    all in any orientation.
+    the object's major axis fills between SIZE_FILL_LOW and the frame's
+    major (larger) dimension. Falls off on the under-fill side; scores
+    0 if the object can't fit inside the frame.
+    For explicit WxH/W/H sizes, both axes are enforced; for single-value
+    sizes, only the major-axis fit is enforced because the minor axis is
+    unknown in most catalogs.
 
     Unknown size returns a type-aware fallback score so genuinely good
     nebula targets with missing catalog size are not buried, while
@@ -140,24 +141,36 @@ def score_size_fit(size_str, fov_width_arcmin, fov_height_arcmin, object_type=No
     - a linear ramp scored these too generously (e.g. an object
     filling ~22% of the frame still scored ~0.54).
     """
+    raw_size_text = "" if size_str is None else str(size_str).strip()
+    has_explicit_minor_axis = bool(_SIZE_RE.match(raw_size_text))
+
     parsed = parse_size_arcmin(size_str)
     if parsed is None:
         return unknown_size_score(object_type)
 
-    major, _minor = parsed
-    limiting_dimension = min(fov_width_arcmin, fov_height_arcmin)
-    if limiting_dimension <= 0 or major <= 0:
+    major, minor = parsed
+    fov_major = max(fov_width_arcmin, fov_height_arcmin)
+    fov_minor = min(fov_width_arcmin, fov_height_arcmin)
+    if fov_major <= 0 or fov_minor <= 0 or major <= 0 or minor <= 0:
         return unknown_size_score(object_type)
 
-    fill_fraction = major / limiting_dimension
+    if major > fov_major:
+        return 0.0
 
-    if fill_fraction > 1.0:
-        return 0.0  # doesn't fit in the frame at all, in any orientation
+    # Only enforce minor-axis fit when the catalog explicitly provides it.
+    # Single-value sizes are typically major-axis-only measurements.
+    if has_explicit_minor_axis and minor > fov_minor:
+        return 0.0
+
+    fill_fraction = major / fov_major
+
     if fill_fraction < SIZE_FILL_LOW:
         return (fill_fraction / SIZE_FILL_LOW) ** 2
     if fill_fraction <= SIZE_FILL_HIGH:
         return 1.0
-    return 1.0 - (fill_fraction - SIZE_FILL_HIGH) / (1.0 - SIZE_FILL_HIGH)
+    # Near-full framing is intentionally considered excellent rather than
+    # over-penalised, as long as the target still fits in the frame.
+    return 1.0
 
 
 def score_brightness(magnitude):

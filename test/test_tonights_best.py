@@ -155,6 +155,7 @@ def test_scoring_helpers():
     check("size parse single value -> circular", parse_size_arcmin("12.9") == (12.9, 12.9))
     check("size parse WxH", parse_size_arcmin("6.0x4.0") == (6.0, 4.0))
     check("size parse WxH takes major/minor regardless of order", parse_size_arcmin("4.0x6.0") == (6.0, 4.0))
+    check("size parse W/H", parse_size_arcmin("0.3/2.2") == (2.2, 0.3))
     check("size parse empty -> None", parse_size_arcmin("") is None)
     check("size parse None -> None", parse_size_arcmin(None) is None)
     check("size parse garbage -> None", parse_size_arcmin("abc") is None)
@@ -166,22 +167,46 @@ def test_scoring_helpers():
         score_size_fit("36", fov, fov) == 1.0,
     )
     check(
+        "size fit keeps near-full-frame objects highly ranked",
+        score_size_fit("58", fov, fov) == 1.0,
+    )
+    check(
         "size fit drops for a tiny object",
         score_size_fit("1", fov, fov) < 0.5,
     )
     check(
         "size fit penalises under-fill quadratically, not linearly",
         # NGC 6744 (15.5') in a Skywatcher Quattro 150P + ASI2600 FOV
-        # (~107.7 x 72.0 arcmin, limiting dimension 72.0): fill fraction
-        # ~21.5%, well under the 40% sweet-spot floor. A linear ramp
+        # (~107.7 x 72.0 arcmin, major dimension 107.7): fill fraction
+        # ~14.4%, well under the 40% sweet-spot floor. A linear ramp
         # scored this ~0.54 (too generous for an object that's
         # genuinely small and lost in the frame); squared, it should
-        # land well under a third.
-        abs(score_size_fit("15.5", 107.7, 72.0) - 0.290) < 0.01,
+        # land close to 0.13.
+        abs(score_size_fit("15.5", 107.7, 72.0) - 0.130) < 0.01,
     )
     check(
         "size fit is zero when object can't fit at all",
         score_size_fit("120", fov, fov) == 0.0,
+    )
+    check(
+        "elongated object that fits long+short frame axes is not zeroed",
+        score_size_fit("32 x 6", 40, 24) > 0.0,
+    )
+    check(
+        "size fit is zero when elongated object exceeds frame long axis",
+        score_size_fit("32 x 6", 30, 24) == 0.0,
+    )
+    check(
+        "size fit is zero when elongated object exceeds frame short axis",
+        score_size_fit("32 x 26", 40, 24) == 0.0,
+    )
+    check(
+        "single-value size is treated as major-axis-only for fit gating",
+        score_size_fit("32.4", 40, 24) > 0.0,
+    )
+    check(
+        "single-value size still scores zero when major axis exceeds frame",
+        score_size_fit("32.4", 30, 24) == 0.0,
     )
     check(
         "size fit unknown size assumes small framing fit",
