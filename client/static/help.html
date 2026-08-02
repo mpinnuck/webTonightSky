@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<\!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -20,14 +20,14 @@
         }
 
         header {
-            background-color: #004080; /* Blue header background */
+            background-color: #004080;
             color: white;
-            display: flex; /* Use flexbox layout */
-            justify-content: center; /* Center content horizontally */
-            align-items: center; /* Align items vertically */
-            height: 45px; /* Increase the height of the header */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 45px;
             padding: 10px;
-            position: relative; /* To position the close button */
+            position: relative;
         }
 
         header h1 {
@@ -35,12 +35,12 @@
             font-size: 1.5rem;
             position: absolute;
             left: 50%;
-            transform: translateX(-50%); /* Center the title */
+            transform: translateX(-50%);
         }
 
         .close-button {
             position: absolute;
-            right: 10px; /* Align to the right edge */
+            right: 10px;
             background: none;
             border: none;
             color: white;
@@ -74,15 +74,14 @@
         main ul {
             list-style-type: disc;
             padding-left: 20px;
-            margin: 0; /* Remove margin from the list itself */
+            margin: 0;
         }
 
         main ul li {
-            margin: 0; /* Remove margin between list items */
-            padding: 5px 0; /* Optional: Add padding for better readability */
+            margin: 0;
+            padding: 5px 0;
             font-size: 0.9rem;
-            line-height: 0.9; /* Adjust line height for compact spacing */
-
+            line-height: 0.9;
         }
 
         footer {
@@ -101,12 +100,9 @@
     <main>
         <section>
             <h2>Introduction</h2>
-            <p>Welcome to <strong>TonightSky</strong>, your companion for planning astronomical observations.<br>
-                This guide will help you navigate the app's features and use it effectively.<br>
-                The app restores the last used settings on reload, updates the the date to today local.<br>
-                Being a web based app you can do your night photography session planning anytime anywhere.
-                </p>
-            </section>
+            <p>Welcome to <strong>TonightSky</strong>, your companion for planning astronomical observations. This guide will help you navigate the app's features and use it effectively.</p>
+        </section>
+
         <section>
             <h2>Settings</h2>
             <p>Customize your observation parameters using the settings panel:</p>
@@ -116,58 +112,70 @@
                 <li><strong>Filters:</strong> Use the catalog filters and query expressions to narrow down your object list.</li>
             </ul>
         </section>
+
+        <section>
+            <h2>Equipment Profiles</h2>
+            <p>Equipment profiles let you capture your imaging setup so Tonight's Best can estimate frame fit and suitability. You can create, edit, import, export, and select profiles from the profile management controls.</p>
+            <ul>
+                <li>Profiles are stored in this browser only, so use Export/Import to move them between devices.</li>
+                <li>Each profile stores focal length, aperture, and sensor dimensions used to derive the field of view.</li>
+                <li>Select a profile before running Tonight's Best so the ranking uses your actual imaging setup.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>Horizon Profiles</h2>
+            <p>Horizon profiles let you model your local skyline for the altitude graph and for Tonight's Best. You can import one or more Stellarium-style .hrz files and keep them locally in the browser.</p>
+            <ul>
+                <li>Select a custom horizon profile to overlay your local skyline on the graph.</li>
+                <li>If no horizon profile is selected, the app falls back to the server's default horizon configuration or a flat 25° horizon.</li>
+                <li>Use the empty selection option to skip the custom horizon and keep the flat default.</li>
+            </ul>
+        </section>
+
         <section>
             <h2>Filter Query</h2>
             <p>The <strong>Filter Query</strong> field allows you to perform SQL-like queries directly on the table data. Use the header names in lowercase, including spaces, to build your query.</p>
-            <p><strong>Logical Operators:</strong></p>  
+            <p><strong>Logical Operators:</strong></p>
             <ul>
-                <li><code>and</code> = <code>and</code>, <code>*</code>, <code>&</code></li>
+                <li><code>and</code> = <code>and</code>, <code>*</code>, <code>&amp;</code></li>
                 <li><code>or</code> = <code>or</code>, <code>|</code>, <code>+</code></li>
             </ul>
             <p><strong>Example Queries:</strong></p>
             <ul>
-                <li><code>transit alt > 70 and (type like galaxy or type like nebula) and realtive tt < 02 and magnitude < 14</code></li>
-                <li><code>altitude > 50 and relative tt < 03 and direction = south</code></li>
-                <li><code>magnitude < 5 and type = galaxy</code></li>
+                <li><code>altitude > 50 and relative tt &lt; 03 and direction = south</code></li>
+                <li><code>magnitude &lt; 5 and type = galaxy</code></li>
                 <li><code>transit time > '21:00' and altitude > 30</code></li>
-                <li><code>catalog = messier and magnitude < 6</code></li>
-                <li><code>before/after = before and altitude < 20</code></li>
-                <li><code>(type = Globular Cluster or type = Planetary Nebula) and magnitude < 8</code></li> 
+                <li><code>catalog = messier and magnitude &lt; 6</code></li>
+                <li><code>before/after = before and altitude &lt; 20</code></li>
+                <li><code>(type = Globular Cluster or type = Planetary Nebula) and magnitude &lt; 8</code></li>
             </ul>
-            <p>Clicking on a header will sort the corresponding column in ascending or descending order.</p>
         </section>
+
         <section>
-            <h2>Table Interactions</h2>
-            <p>Click on any cell in the <strong>Altitude</strong> column to view the altitude graph for the selected object.</p>
-            <p>The altitude graph displays the altitude of the object over time, with local time shown on the x-axis.<br>
-               The <span style="color: #00ff00;">green portion</span> of the graph highlights the visible period, indicating when the object is above the horizon and visible from your location.</p>
-            <p>In the table, the <strong>Before/After</strong> column shows the relative time of the object's transit, formatted as <code>hh:mm</code>, before or after the nominated time specified in your settings.</p>
-        </section>
-        <section>
-            <h2>Graph Details</h2>
-            <p>The altitude graph provides a detailed visualization of the selected object's position:</p>
+            <h2>Table and Graph Tips</h2>
             <ul>
-                <li><strong>Transit Time:</strong> The moment the object is at its highest altitude.</li>
-                <li><strong>Visible Period:</strong> Highlighted in green, showing when the object is above the horizon.</li>
-                <li><strong>X-axis:</strong> Local time, making it easy to plan your observations.</li>
+                <li>Click a column header to sort the table ascending or descending.</li>
+                <li>Click an Altitude cell to open the Altitude Graph for that target.</li>
+                <li>The Altitude Graph highlights the visible period in green and shows the selected horizon overlay when available.</li>
+                <li>Use the Altitude Graph to see when an object rises, transits, and sets, and to check whether your local skyline blocks it at certain times.</li>
+                <li>Times between 00:00 and 11:59 are treated as the morning of the next day.</li>
+                <li>Double-click a row to open the object on an external astronomy reference site.</li>
             </ul>
         </section>
+
         <section>
-            <h2>Tips & Notes</h2>
+            <h2>Tonight's Best</h2>
+            <p><strong>Tonight's Best</strong> reorders the already-filtered object list for imaging suitability rather than simply returning catalog order.</p>
             <ul>
-                <li>Times between 00:00 to 11:59 are treated as the morning of the next day.</li>
-                <li>Press enter after altering settings will rerun the query.</li>
-                <li>Double-click a row in the table to search for the object on Telescopius.</li>
-                <li>Use the "Filter Query" field to refine your search results (e.g., <code>altitude > 30 and magnitude < 6</code>).</li>
-                <li>The "Object Count" label updates dynamically as objects are loaded into the table.</li>
+                <li>It requires a selected equipment profile so the field of view can be calculated.</li>
+                <li>It optionally uses a selected horizon profile to evaluate whether the object is above your local skyline during the night.</li>
+                <li>The results add <strong>Score</strong> and <strong>Shooting Time</strong> columns.</li>
             </ul>
+            <p>The score is built from size fit, brightness, best shooting window, and moon distance. The formula is <code>composite = size_score × (0.5 × brightness_score + (1/3) × time_score + (1/6) × moon_score)</code>.</p>
+            <p>In practice, size fit acts as the main gate: if an object is too large for your selected field of view, its score drops to zero. Brightness is based on magnitude, the shooting-window score comes from the longest clear run during astronomical darkness, and the moon score falls when the Moon is bright and close to the target.</p>
         </section>
-        <section>
-            <h2>Issues</h2>
-            <ul>
-                <li>TBA</li>
-            </ul>
-        </section>
+
         <section>
             <h2>Contact & Support</h2>
             <p>For issues, enhancements, or feedback, please use the following:</p>
@@ -175,10 +183,6 @@
                 <li><a href="https://github.com/mpinnuck/webTonightSky.git" target="_blank" style="color: #98FB98;">GitHub Repository</a></li>
                 <li><a href="mailto:mpinnuck@microconcepts.com.au" style="color: #98FB98;">mpinnuck@microconcepts.com.au</a></li>
             </ul>
-        </section>
-        <section>
-            <h2>Acknowledgements</h2>
-            <p>The idea and data for this application were inspired by <a href="https://www.setiastro.com/" target="_blank" style="color: #98FB98;">Seti Astro</a>.</p>
         </section>
     </main>
     <footer>
