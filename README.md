@@ -2,6 +2,8 @@
 
 Welcome to **TonightSky**, your companion for planning astronomical observations. This guide will help you navigate the app's features and use it effectively.
 
+Want to try it out right away? Visit: https://app.microconcepts.com.au/tonightsky/
+
 ---
 
 ## Introduction
