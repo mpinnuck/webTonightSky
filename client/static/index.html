@@ -183,22 +183,23 @@
                 }
             });
 
-            // Handle window focus - clear list only if date is not today
+            // Handle window focus - only clear if the selected date no longer
+            // matches the date used to build the currently displayed list.
             window.addEventListener('focus', () => {
                 const dateInput = document.getElementById('date');
-                if (dateInput) {
-                    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                    const today = getIsoDateInTimeZone(timezone);
-                    const currentDate = dateInput.value;
-                    
-                    // Only clear the list if the current date is not today
-                    if (currentDate && currentDate !== today) {
-                        const tableBody = document.getElementById('resultsTableBody');
-                        if (tableBody) {
-                            tableBody.innerHTML = ""; // Clear the list
-                            updateObjectCount(); // Update the object count display
-                        }
-                    }
+                const tableBody = document.getElementById('resultsTableBody');
+                if (!dateInput || !tableBody) return;
+
+                const hasRows = tableBody.querySelectorAll('tr').length > 0;
+                if (!hasRows) return;
+
+                const currentDate = dateInput.value;
+                const listDate = getDisplayedListDate();
+
+                if (currentDate && listDate && currentDate !== listDate) {
+                    tableBody.innerHTML = ""; // Clear mismatched list
+                    setDisplayedListDate('');
+                    updateObjectCount(); // Update the object count display
                 }
             });
 
@@ -544,6 +545,45 @@
             document.getElementById('objectCount').textContent = `Object Count: ${rowCount}`;
         }
 
+        function setDisplayedListDate(dateValue) {
+            const tableBody = document.getElementById('resultsTableBody');
+            if (!tableBody) return;
+
+            if (dateValue) {
+                tableBody.dataset.listDate = dateValue;
+            } else {
+                delete tableBody.dataset.listDate;
+            }
+        }
+
+        function getDateFromSignature(signature) {
+            if (!signature) return '';
+            try {
+                const parsed = JSON.parse(signature);
+                return parsed?.date || '';
+            } catch (e) {
+                console.warn('Invalid cached result signature:', e);
+                return '';
+            }
+        }
+
+        function getDisplayedListDate() {
+            const tableBody = document.getElementById('resultsTableBody');
+            if (!tableBody) return '';
+
+            if (tableBody.dataset.listDate) return tableBody.dataset.listDate;
+
+            const cached = sessionStorage.getItem('cachedResults');
+            if (!cached) return '';
+            try {
+                const parsed = JSON.parse(cached);
+                return parsed.listDate || getDateFromSignature(parsed.signature);
+            } catch (e) {
+                console.warn('Invalid cached results payload:', e);
+                return '';
+            }
+        }
+
         function buildResultSignature() {
             // Captures the fields that determine what a cached result set
             // actually represents, so a stale sessionStorage cache (e.g.
@@ -600,6 +640,7 @@
 
             const tableBody = document.getElementById('resultsTableBody');
             tableBody.innerHTML = ""; // Clear previous results
+            setDisplayedListDate('');
             const cachedObjects = []; // Collect results for caching
             const objectCount = document.getElementById('objectCount');
 
@@ -651,8 +692,10 @@
                 // Cache results in sessionStorage so they survive tab discard/reload,
                 // tagged with the query that produced them so a stale cache is never
                 // shown against a filter/date/location it doesn't match.
+                setDisplayedListDate(date);
                 sessionStorage.setItem('cachedResults', JSON.stringify({
                     signature: buildResultSignature(),
+                    listDate: date,
                     objects: cachedObjects
                 }));
 
@@ -680,6 +723,7 @@
                 }
                 const objects = parsed.objects || [];
                 objects.forEach(obj => appendRow(obj));
+                setDisplayedListDate(parsed.listDate || getDateFromSignature(parsed.signature));
                 document.getElementById('objectCount').textContent = `Object Count: ${objects.length}`;
             } catch (e) {
                 console.error('Error restoring cached results:', e);
